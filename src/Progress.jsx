@@ -22,7 +22,7 @@ function Progress(props) {
     var total = 7068811;
     var progress = Object.keys(openedLinks).length;
     var percent = (100 * progress) / total;
-    return Math.floor(percent);
+    return percent.toFixed(10);
   };
 
   return (
