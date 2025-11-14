@@ -206,8 +206,9 @@ function App() {
         </button>
       </div>
       {log.map((a, i) => {
-        if (a[0] == "*" || a[0] == "#" || i - log.length > 50) {
-          //don't render more than 50
+        console.log(log.length - i, a);
+        if (a[0] == "*" || a[0] == "#" ||  (i> 0 && log.length - i > 50)) {
+          //don't render more than 20
           return null;
         }
         return (
