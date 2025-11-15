@@ -13,31 +13,31 @@
       "desc": "Find an article of a U.S. President.",
       "time-limit": 60,
       "reward": 50,
-      "trigger": 200,
+      "trigger": 50,
       "category": "Presidents of the United States"
     },
     {
       "id": "quest-3",
       "desc": "Find an article of a Best Actress Academy Award Winner.",
       "time-limit": 60,
-      "reward": 80,
-      "trigger": 1000,
+      "reward": 50,
+      "trigger": 100,
       "category": "Best Actress Academy Award winners"
     },
     {
       "id": "quest-3",
       "desc": "Find an article of a big cat.",
       "time-limit": 60,
-      "reward": 200,
-      "trigger": 4000,
+      "reward": 60,
+      "trigger": 200,
       "category": "Big cats"
     },
     {
       "id": "quest-3",
       "desc": "Find an article about a cause of death.",
       "time-limit": 60,
-      "reward": 300,
-      "trigger": 6000,
+      "reward": 70,
+      "trigger": 300,
       "category": "Causes of death"
     }
   ]
