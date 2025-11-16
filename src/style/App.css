@@ -210,9 +210,7 @@ body {
 
   padding: 2vh 2vh 0;
   font-family: "Helvetica";
-  display: flex;
-  flex-direction: column-reverse;
-  justify-content: start;
+
   overflow-y: scroll;
   pointer-events: all;
   backdrop-filter: blur(5px);

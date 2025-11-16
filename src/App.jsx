@@ -51,6 +51,8 @@ function App() {
       setOpenedLinks(d.openedLinks);
       setPurchasedItems(d.purchasedItems);
       setQuests(d.quests);
+      setLog(d.log);
+      setCurrentArticle(Object.keys(d.openedLinks).length - 1);
     }
   }, []);
 
@@ -65,6 +67,7 @@ function App() {
       openedLinks: openedLinks,
       purchasedItems: purchasedItems,
       quests: quests,
+      log: log,
     };
 
     var saveString = JSON.stringify(newPlayerData);
@@ -213,7 +216,6 @@ function App() {
         <img src={Logo} className="game-logo" />
       </div>
       {log.map((a, i) => {
-        console.log(log.length - i, a);
         if (
           a[0] == "*" ||
           a[0] == "#" ||

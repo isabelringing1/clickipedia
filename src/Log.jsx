@@ -4,7 +4,7 @@ function Log(props) {
   const { log, resurfaceArticle } = props;
   return (
     <div id="log">
-      {log.map((a, i) => {
+      {[...log].reverse().map((a, i) => {
         if (a[0] == "*") {
           return (
             <div className="log-entry " key={"log-" + i}>
