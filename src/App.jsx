@@ -10,8 +10,8 @@ import Info from "./Info";
 
 import { formatTopic } from "./util.js";
 
-import "./App.css";
-import "./Wikipedia.css";
+import "./style/App.css";
+import "./style/Wikipedia.css";
 
 function App() {
   const startingArticle = "Incremental_game";
@@ -84,6 +84,11 @@ function App() {
     }
     return null;
   }
+
+  const reset = () => {
+    localStorage.clear();
+    location.reload();
+  };
 
   const shouldFireAuto = () => {
     if (autos == 0) {
@@ -192,7 +197,7 @@ function App() {
   return (
     <div id="content">
       <Debug setAutos={setAutos} setKnowledge={setKnowledge} />
-      <Info info={info} setInfo={setInfo} />
+      <Info info={info} setInfo={setInfo} reset={reset} />
       <Error message={error} setMessage={setError} />
       <div className="game-header">
         <img src={Logo} className="game-logo" />
@@ -207,8 +212,8 @@ function App() {
       </div>
       {log.map((a, i) => {
         console.log(log.length - i, a);
-        if (a[0] == "*" || a[0] == "#" ||  (i> 0 && log.length - i > 50)) {
-          //don't render more than 20
+        if (a[0] == "*" || a[0] == "#" || (i > 0 && log.length - i > 50)) {
+          //don't render more than 50
           return null;
         }
         return (

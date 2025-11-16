@@ -169,7 +169,12 @@ function Article(props) {
         onClick={onArticleClicked}
         onMouseDown={startDrag}
       >
-        <div className="article-header" id={"article-header-" + id}>
+        <div
+          className={
+            "article-header " + (isCondensed ? "condensed-header" : "")
+          }
+          id={"article-header-" + id}
+        >
           {isCondensed && <div className={"expand-text"}>Click to expand</div>}
           {formatTopic(topic)}
         </div>
@@ -178,7 +183,7 @@ function Article(props) {
         {!isCondensed && (
           <div
             dangerouslySetInnerHTML={{ __html: content }}
-            style={{ lineHeight: 1.6 }}
+            style={{ lineHeight: 1.66 }}
           />
         )}
         {isCondensed && (

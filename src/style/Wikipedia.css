@@ -1,7 +1,7 @@
 body {
   margin: 0 0 0 0;
   padding: 0 0 0 0;
-  font-size: 1.5vh;
+  font-size: max(17px, 1.5vh);
 
   font-family: sans-serif;
   color: black;
@@ -9,6 +9,91 @@ body {
 
   direction: ltr;
   unicode-bidi: embed;
+}
+
+.sistersitebox {
+  display: none;
+}
+
+.ambox {
+  border: 1px solid #a2a9b1;
+  border-left: 10px solid #36c;
+  background-color: #fbfbfb;
+  box-sizing: border-box;
+  margin: 0 10%;
+}
+
+.ambox-content {
+  border-left: 10px solid #f28500;
+}
+
+.ambox-delete {
+  border-left: 10px solid #b32424;
+}
+
+.ambox-speedy {
+  border-left: 10px solid #b32424;
+  background-color: #fee7e6;
+}
+
+.ambox-style {
+  border-left: 10px solid #fc3;
+}
+
+.ambox-move {
+  border-left: 10px solid #9932cc;
+}
+
+.ambox-protection {
+  border-left: 10px solid #a2a9b1;
+}
+
+.mbox-image {
+  border: none;
+  padding: 2px 0 2px 0.5em;
+  text-align: center;
+}
+
+.mbox-text {
+  border: none;
+  padding: 0.25em 0.5em;
+  width: 100%;
+}
+
+.wikitable {
+  background-color: var(--background-color-neutral-subtle, #f8f9fa);
+  color: var(--color-base, #202122);
+  margin: 1em 0;
+  border: 1px solid var(--border-color-base, #a2a9b1);
+  border-collapse: collapse;
+}
+
+.mw-datatable {
+  background-color: var(--background-color-base, #fff);
+  color: var(--color-base, #202122);
+}
+
+.wikitable > * > tr > th {
+  background-color: var(--background-color-neutral, #eaecf0);
+  color: var(--color-base, #202122);
+  text-align: center;
+}
+
+.wikitable > * > tr > th,
+.wikitable > * > tr > td {
+  border: 1px solid var(--border-color-base, #a2a9b1);
+  padding: 0.2em 0.4em;
+}
+
+.swatch-unsupported {
+  background-color: #fdb3ab;
+}
+
+tr {
+  display: table-row;
+  vertical-align: inherit;
+  unicode-bidi: isolate;
+  border-color: inherit;
 }
 
 #mw_main,
@@ -651,10 +736,6 @@ a {
 
 a:visited {
   color: rgb(106, 96, 176);
-}
-
-.printfooter {
-  display: none;
 }
 
 .sharedUploadNotice {
@@ -1347,7 +1428,6 @@ figure {
   clear: right;
   display: table;
   float: right;
-  height: 253.5px;
   margin-bottom: 9.555px;
   margin-left: 10.29px;
   margin-right: 0px;
@@ -1394,7 +1474,7 @@ figcaption {
   padding-bottom: 6px;
   padding-left: 6px;
   padding-right: 6px;
-  padding-top: 0px;
+  padding-top: 10px;
   width: 346px;
   font-family: sans-serif;
   font-size: 14.144px;

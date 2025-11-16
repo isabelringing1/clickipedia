@@ -1,10 +1,25 @@
 function Info(props) {
-  const { info, setInfo } = props;
+  const { info, setInfo, reset } = props;
 
   var infoHtml = (
     <div className="info-div">
-      <div className="info-text">Can you open every article on Wikipedia?</div>
-      <div className="info-text">Probably not. Why don't you try, anyway?</div>
+      <div className="info-text">
+        Can you open every article on Wikipedia?
+        <br />
+        Probably not. Why don't you try, anyway?
+      </div>
+      <div
+        className="info-text"
+        style={{ paddingTop: "1vh", color: "rgb(0, 0, 0, 0.75)" }}
+      >
+        <i>
+          This game is in active development and will update periodically with
+          improvements. Thanks for playing!
+        </i>
+      </div>
+      <button className="reset-button" onClick={reset}>
+        Reset Game
+      </button>
     </div>
   );
 
@@ -24,9 +39,16 @@ function Info(props) {
     </div>
   );
 
+  const onClick = (e) => {
+    if (e.target.closest(".info-div")) {
+      return;
+    }
+    setInfo("");
+  };
+
   return (
     info != "" && (
-      <div className="info-container" onClick={() => setInfo("")}>
+      <div className="info-container" onClick={onClick}>
         {info == "info" ? infoHtml : endingHtml}
       </div>
     )
