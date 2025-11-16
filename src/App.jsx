@@ -12,6 +12,7 @@ import { formatTopic } from "./util.js";
 
 import "./style/App.css";
 import "./style/Wikipedia.css";
+import "./style/ReactResizable.css";
 
 function App() {
   const startingArticle = "Incremental_game";
@@ -199,8 +200,8 @@ function App() {
       <Debug setAutos={setAutos} setKnowledge={setKnowledge} />
       <Info info={info} setInfo={setInfo} reset={reset} />
       <Error message={error} setMessage={setError} />
+
       <div className="game-header">
-        <img src={Logo} className="game-logo" />
         <button
           className="info-button"
           onClick={() => {
@@ -209,10 +210,15 @@ function App() {
         >
           ?
         </button>
+        <img src={Logo} className="game-logo" />
       </div>
       {log.map((a, i) => {
         console.log(log.length - i, a);
-        if (a[0] == "*" || a[0] == "#" || (i > 0 && log.length - i > 50)) {
+        if (
+          a[0] == "*" ||
+          a[0] == "#" ||
+          (i > 0 && i != currentArticle && log.length - i > 50)
+        ) {
           //don't render more than 50
           return null;
         }

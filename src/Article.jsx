@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useSound } from "use-sound";
+import { SpinnerCircularFixed } from "spinners-react";
+import { ResizableBox } from "react-resizable";
+
 import {
   formatTopic,
   fetchWikiPage,
@@ -23,13 +26,14 @@ function Article(props) {
     checkForQuest,
     processSelfLink,
   } = props;
-  const [content, setContent] = useState("");
-  const [summary, setSummary] = useState("");
+
+  const [content, setContent] = useState(null);
+  const [summary, setSummary] = useState(null);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
 
-  const [posTop, setPosTop] = useState(0);
+  const [posTop, setPosTop] = useState(null);
   const [posLeft, setPosLeft] = useState(0);
   const [showHighlight, setShowHighlight] = useState(false);
   const dragTop = useRef(null);
@@ -119,6 +123,10 @@ function Article(props) {
     if (id == 0) {
       return;
     }
+    console.log(e.target);
+    if (e.target.closest(".react-resizable-handle")) {
+      return;
+    }
 
     dragTop.current = e.clientY;
     dragLeft.current = e.clientX;
@@ -152,6 +160,9 @@ function Article(props) {
   if (showHighlight) {
     cn += " highlight";
   }
+  if (!ready) {
+    cn += " loading";
+  }
   cn += isCondensed ? " condensed" : " full";
 
   var articleStyle = {
@@ -160,14 +171,21 @@ function Article(props) {
     zIndex: isCondensed ? id : 1000000,
   };
 
+  const posReady = () => {
+    return id == 0 || posTop;
+  };
+
   return (
-    ready && (
-      <div
+    posReady() && (
+      <ResizableBox
         className={cn}
         id={"article-" + id}
         style={id == 0 ? {} : articleStyle}
         onClick={onArticleClicked}
         onMouseDown={startDrag}
+        width={1000}
+        height={1000}
+        minConstraints={[400, 200]}
       >
         <div
           className={
@@ -179,20 +197,30 @@ function Article(props) {
           {formatTopic(topic)}
         </div>
 
-        {loading && <p>Loading...</p>}
-        {!isCondensed && (
+        {!ready && (
+          <SpinnerCircularFixed
+            thickness={150}
+            style={{ paddingTop: "1vh" }}
+            color={"#8d8d8dff"}
+            secondaryColor={"#d5d5d5ff"}
+          />
+        )}
+        {ready && !isCondensed && (
           <div
+            className="article-content"
+            id={"article-content-" + id}
             dangerouslySetInnerHTML={{ __html: content }}
             style={{ lineHeight: 1.66 }}
           />
         )}
-        {isCondensed && (
+        {ready && isCondensed && (
           <div
-            className="condensed"
+            className="article-content condensed"
+            id={"article-content-" + id}
             dangerouslySetInnerHTML={{ __html: summary }}
           ></div>
         )}
-      </div>
+      </ResizableBox>
     )
   );
 }

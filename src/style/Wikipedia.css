@@ -21,6 +21,7 @@ body {
   background-color: #fbfbfb;
   box-sizing: border-box;
   margin: 0 10%;
+  margin-top: 1vh;
 }
 
 .ambox-content {

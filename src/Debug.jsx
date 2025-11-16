@@ -6,7 +6,7 @@ function Debug(props) {
 
   const autosRef = useRef();
   const knowledgeRef = useRef();
-  const devMode = false;
+  const devMode = true;
 
   useEffect(() => {
     document.addEventListener("keydown", (event) => {
