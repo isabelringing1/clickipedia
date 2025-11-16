@@ -95,6 +95,9 @@ tr {
   unicode-bidi: isolate;
   border-color: inherit;
 }
+.mw-file-element {
+  margin-top: 0.6vh;
+}
 
 #mw_main,
 #p-personal,
@@ -1466,6 +1469,13 @@ figure {
   margin-inline-start: 10.29px;
   unicode-bidi: isolate;
   user-select: none;
+}
+
+@media (max-width: 1200px) {
+  figure {
+    margin: 0 auto !important;
+    float: none !important;
+  }
 }
 
 figcaption {
