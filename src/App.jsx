@@ -215,32 +215,33 @@ function App() {
         </button>
         <img src={Logo} className="game-logo" />
       </div>
-      {log.map((a, i) => {
-        if (
-          a[0] == "*" ||
-          a[0] == "#" ||
-          (i > 0 && i != currentArticle && log.length - i > 50)
-        ) {
-          //don't render more than 50
-          return null;
-        }
-        return (
-          <Article
-            isCurrent={i == currentArticle && i != 0}
-            topic={a}
-            key={"article-" + i}
-            id={i}
-            linksToCheck={linksToCheck}
-            resurfaceArticle={resurfaceArticle}
-            hasSeenArticle={hasSeenArticle}
-            processInvalidArticle={processInvalidArticle}
-            processNewArticle={processNewArticle}
-            processSeenArticle={processSeenArticle}
-            checkForQuest={checkForQuest}
-            processSelfLink={processSelfLink}
-          />
-        );
-      })}
+      {log &&
+        log.map((a, i) => {
+          if (
+            a[0] == "*" ||
+            a[0] == "#" ||
+            (i > 0 && i != currentArticle && log.length - i > 50)
+          ) {
+            //don't render more than 50
+            return null;
+          }
+          return (
+            <Article
+              isCurrent={i == currentArticle && i != 0}
+              topic={a}
+              key={"article-" + i}
+              id={i}
+              linksToCheck={linksToCheck}
+              resurfaceArticle={resurfaceArticle}
+              hasSeenArticle={hasSeenArticle}
+              processInvalidArticle={processInvalidArticle}
+              processNewArticle={processNewArticle}
+              processSeenArticle={processSeenArticle}
+              checkForQuest={checkForQuest}
+              processSelfLink={processSelfLink}
+            />
+          );
+        })}
       <Menu
         log={log}
         openedLinks={openedLinks}
