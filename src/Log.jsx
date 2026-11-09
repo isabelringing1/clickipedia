@@ -5,6 +5,8 @@ function Log(props) {
   return (
     <div id="log">
       {[...log].reverse().map((a, i) => {
+        const articleId = log.length - 1 - i;
+
         if (a[0] == "*") {
           return (
             <div className="log-entry " key={"log-" + i}>
@@ -30,7 +32,10 @@ function Log(props) {
           return (
             <div className="log-entry" key={"log-" + i}>
               &gt; Opened{" "}
-              <a className="log-article" onClick={() => resurfaceArticle(i)}>
+              <a
+                className="log-article"
+                onClick={() => resurfaceArticle(articleId)}
+              >
                 {formatTopic(a)}
               </a>
             </div>

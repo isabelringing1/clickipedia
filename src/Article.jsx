@@ -12,6 +12,8 @@ import {
 } from "./util.js";
 import clickSound from "/Click_1.wav";
 
+const DRAG_THRESHOLD = 4;
+
 function Article(props) {
   var {
     topic,
@@ -36,17 +38,29 @@ function Article(props) {
   const [posTop, setPosTop] = useState(null);
   const [posLeft, setPosLeft] = useState(0);
   const [showHighlight, setShowHighlight] = useState(false);
-  const dragTop = useRef(null);
-  const dragLeft = useState(null);
+  const dragState = useRef(null);
+  const dragFrame = useRef(null);
+  const suppressClick = useRef(false);
 
   var isCondensed = !isCurrent && id != 0;
   const [playSound] = useSound(clickSound);
 
   useEffect(() => {
-    if (!posTop && id > 0) {
-      setPosTop(Math.random() * (window.innerHeight / 2));
-      setPosLeft((Math.random() * window.innerWidth) / 2);
+    if (posTop == null && id > 0) {
+      const stage = document.getElementById("game-stage");
+      const stageHeight = stage?.clientHeight ?? window.innerHeight;
+      const stageWidth = stage?.clientWidth ?? window.innerWidth;
+      setPosTop(Math.random() * stageHeight * 0.12);
+      setPosLeft(Math.random() * stageWidth * 0.1);
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (dragFrame.current != null) {
+        cancelAnimationFrame(dragFrame.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -72,6 +86,11 @@ function Article(props) {
 
   const onArticleClicked = (e) => {
     e.preventDefault();
+
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
 
     if (isCondensed) {
       resurfaceArticle(id);
@@ -119,38 +138,112 @@ function Article(props) {
     }
   };
 
-  const startDrag = (e) => {
-    if (id == 0) {
-      return;
-    }
-    console.log(e.target);
-    if (e.target.closest(".react-resizable-handle")) {
+  const updateDragTransform = () => {
+    dragFrame.current = null;
+    const drag = dragState.current;
+    if (!drag || !drag.moved) {
       return;
     }
 
-    dragTop.current = e.clientY;
-    dragLeft.current = e.clientX;
-    document.onmouseup = closeDragElement;
-    document.onmousemove = articleDragged;
+    const leftDelta = drag.clientX - drag.startX;
+    const topDelta = drag.clientY - drag.startY;
+    drag.article.style.transform = `translate3d(${leftDelta}px, ${topDelta}px, 0)`;
   };
 
-  const closeDragElement = () => {
-    document.onmouseup = null;
-    document.onmousemove = null;
+  const startDrag = (e) => {
+    if (id == 0 || e.button != 0) {
+      return;
+    }
+
+    const article = e.currentTarget.closest(".article");
+    if (!article) {
+      return;
+    }
+
+    suppressClick.current = false;
+    dragState.current = {
+      article,
+      header: e.currentTarget,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      startLeft: posLeft,
+      startTop: posTop,
+      moved: false,
+    };
+    article.classList.add("dragging");
+    e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const articleDragged = (e) => {
-    if (id == 0) {
+    const drag = dragState.current;
+    if (!drag || e.pointerId != drag.pointerId) {
       return;
     }
-    e.preventDefault();
-    // calculate the new cursor position:
-    var leftDelta = dragLeft.current - e.clientX;
-    var topDelta = dragTop.current - e.clientY;
 
-    // set the element's new position:
-    setPosTop(posTop - topDelta);
-    setPosLeft(posLeft - leftDelta);
+    e.preventDefault();
+    drag.clientX = e.clientX;
+    drag.clientY = e.clientY;
+
+    if (
+      !drag.moved &&
+      Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) >=
+        DRAG_THRESHOLD
+    ) {
+      drag.moved = true;
+      suppressClick.current = true;
+    }
+
+    if (drag.moved && dragFrame.current == null) {
+      dragFrame.current = requestAnimationFrame(updateDragTransform);
+    }
+  };
+
+  const closeDragElement = (e) => {
+    const drag = dragState.current;
+    if (!drag || e.pointerId != drag.pointerId) {
+      return;
+    }
+
+    if (dragFrame.current != null) {
+      cancelAnimationFrame(dragFrame.current);
+      dragFrame.current = null;
+    }
+
+    const endX = e.type === "pointercancel" ? drag.clientX : e.clientX;
+    const endY = e.type === "pointercancel" ? drag.clientY : e.clientY;
+    const moved =
+      drag.moved ||
+      Math.hypot(endX - drag.startX, endY - drag.startY) >= DRAG_THRESHOLD;
+
+    if (moved) {
+      const nextLeft = drag.startLeft + endX - drag.startX;
+      const nextTop = drag.startTop + endY - drag.startY;
+
+      // Update the node before committing React state to avoid a one-frame snap.
+      drag.article.style.left = `${nextLeft}px`;
+      drag.article.style.top = `${nextTop}px`;
+      drag.article.style.transform = "";
+      setPosLeft(nextLeft);
+      setPosTop(nextTop);
+
+      if (e.type === "pointercancel") {
+        suppressClick.current = false;
+      } else {
+        suppressClick.current = true;
+        setTimeout(() => {
+          suppressClick.current = false;
+        }, 0);
+      }
+    }
+
+    drag.article.classList.remove("dragging");
+    if (drag.header.hasPointerCapture(drag.pointerId)) {
+      drag.header.releasePointerCapture(drag.pointerId);
+    }
+    dragState.current = null;
   };
 
   var cn = "article " + topic;
@@ -172,7 +265,7 @@ function Article(props) {
   };
 
   const posReady = () => {
-    return id == 0 || posTop;
+    return id == 0 || posTop != null;
   };
 
   return (
@@ -182,7 +275,6 @@ function Article(props) {
         id={"article-" + id}
         style={id == 0 ? {} : articleStyle}
         onClick={onArticleClicked}
-        onMouseDown={startDrag}
         width={1000}
         height={1000}
         minConstraints={[400, 200]}
@@ -192,6 +284,10 @@ function Article(props) {
             "article-header " + (isCondensed ? "condensed-header" : "")
           }
           id={"article-header-" + id}
+          onPointerDown={startDrag}
+          onPointerMove={articleDragged}
+          onPointerUp={closeDragElement}
+          onPointerCancel={closeDragElement}
         >
           {isCondensed && <div className={"expand-text"}>Click to expand</div>}
           {formatTopic(topic)}

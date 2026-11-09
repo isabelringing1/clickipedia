@@ -17,10 +17,23 @@ function Menu(props) {
     purchasedItems,
     setPurchasedItems,
   } = props;
+  const hasOpenedArticle = Object.keys(openedLinks).length > 1;
+  const hasOpenQuest = Object.values(quests).some((quest) => !quest.complete);
+
   return (
     <div id="menu">
-      <Log log={log} resurfaceArticle={resurfaceArticle} />
-      <Progress openedLinks={openedLinks} knowledge={knowledge} autos={autos} />
+      <Progress
+        openedLinks={openedLinks}
+        knowledge={knowledge}
+        autos={autos}
+      />
+
+      {hasOpenQuest && (
+        <section className="menu-panel quests-panel">
+          <h2>Quests</h2>
+          <Quests quests={quests} />
+        </section>
+      )}
 
       <Shop
         knowledge={knowledge}
@@ -32,7 +45,12 @@ function Menu(props) {
         setPurchasedItems={setPurchasedItems}
       />
 
-      <Quests quests={quests} />
+      {hasOpenedArticle && (
+        <section className="menu-panel history-panel">
+          <h2>History</h2>
+          <Log log={log} resurfaceArticle={resurfaceArticle} />
+        </section>
+      )}
     </div>
   );
 }

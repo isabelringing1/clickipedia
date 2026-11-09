@@ -42,12 +42,16 @@ function Shop(props) {
     );
   };
 
+  const visibleCards = cards.filter(shouldShowCard);
+  if (visibleCards.length == 0) {
+    return null;
+  }
+
   return (
-    <div className="shop">
-      {cards.map((card, i) => {
-        if (!shouldShowCard(card)) {
-          return null;
-        } else {
+    <section className="menu-panel shop-panel">
+      <h2>Shop</h2>
+      <div className="shop">
+        {visibleCards.map((card, i) => {
           return (
             <ShopCard
               key={"shop-card-" + i}
@@ -56,9 +60,9 @@ function Shop(props) {
               onBuy={onBuy}
             />
           );
-        }
-      })}
-    </div>
+        })}
+      </div>
+    </section>
   );
 }
 

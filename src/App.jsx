@@ -50,7 +50,16 @@ function App() {
       setAutos(d.autos);
       setOpenedLinks(d.openedLinks);
       setPurchasedItems(d.purchasedItems);
-      setQuests(d.quests);
+      const refreshedQuests = Object.fromEntries(
+        Object.entries(d.quests).map(([id, entry]) => {
+          const latestQuest = questList.find((quest) => quest.id == id);
+          return [
+            id,
+            latestQuest ? { ...entry, quest: latestQuest } : entry,
+          ];
+        }),
+      );
+      setQuests(refreshedQuests);
       setLog(d.log);
       setCurrentArticle(Object.keys(d.openedLinks).length - 1);
     }
@@ -184,12 +193,15 @@ function App() {
     var openQuests = Object.keys(quests).filter((id) => !quests[id].complete);
     for (var i = 0; i < openQuests.length; i++) {
       var questEntry = quests[openQuests[i]];
+      const latestQuest =
+        questList.find((quest) => quest.id == questEntry.quest.id) ??
+        questEntry.quest;
 
-      if (categories.includes(questEntry.quest.category)) {
+      if (categories.includes(latestQuest.category)) {
         var newQuests = { ...quests };
         newQuests[questEntry.quest.id].complete = true;
         setQuests(newQuests);
-        setKnowledge(knowledge + questEntry.quest.reward);
+        setKnowledge(knowledge + latestQuest.reward);
         console.log("Quest complete: " + questEntry.quest.id);
         setLog([...log, "#QUEST"]);
         return true;
@@ -204,57 +216,64 @@ function App() {
       <Info info={info} setInfo={setInfo} reset={reset} />
       <Error message={error} setMessage={setError} />
 
-      <div className="game-header">
-        <button
-          className="info-button"
-          onClick={() => {
-            setInfo("info");
-          }}
-        >
-          ?
-        </button>
-        <img src={Logo} className="game-logo" />
+      <div className="game-shell">
+        <div className="game-header">
+          <button
+            className="info-button"
+            onClick={() => {
+              setInfo("info");
+            }}
+            aria-label="About Clickipedia"
+          >
+            ?
+          </button>
+          <img src={Logo} className="game-logo" alt="Clickipedia" />
+        </div>
+
+        <main className="game-stage" id="game-stage">
+          {log &&
+            log.map((a, i) => {
+              if (
+                a[0] == "*" ||
+                a[0] == "#" ||
+                (i > 0 && i != currentArticle && log.length - i > 50)
+              ) {
+                //don't render more than 50
+                return null;
+              }
+              return (
+                <Article
+                  isCurrent={i == currentArticle && i != 0}
+                  topic={a}
+                  key={"article-" + i}
+                  id={i}
+                  linksToCheck={linksToCheck}
+                  resurfaceArticle={resurfaceArticle}
+                  hasSeenArticle={hasSeenArticle}
+                  processInvalidArticle={processInvalidArticle}
+                  processNewArticle={processNewArticle}
+                  processSeenArticle={processSeenArticle}
+                  checkForQuest={checkForQuest}
+                  processSelfLink={processSelfLink}
+                />
+              );
+            })}
+        </main>
+
+        <Menu
+          log={log}
+          openedLinks={openedLinks}
+          knowledge={knowledge}
+          setKnowledge={setKnowledge}
+          autos={autos}
+          setAutos={setAutos}
+          quests={quests}
+          resurfaceArticle={resurfaceArticle}
+          setInfo={setInfo}
+          purchasedItems={purchasedItems}
+          setPurchasedItems={setPurchasedItems}
+        />
       </div>
-      {log &&
-        log.map((a, i) => {
-          if (
-            a[0] == "*" ||
-            a[0] == "#" ||
-            (i > 0 && i != currentArticle && log.length - i > 50)
-          ) {
-            //don't render more than 50
-            return null;
-          }
-          return (
-            <Article
-              isCurrent={i == currentArticle && i != 0}
-              topic={a}
-              key={"article-" + i}
-              id={i}
-              linksToCheck={linksToCheck}
-              resurfaceArticle={resurfaceArticle}
-              hasSeenArticle={hasSeenArticle}
-              processInvalidArticle={processInvalidArticle}
-              processNewArticle={processNewArticle}
-              processSeenArticle={processSeenArticle}
-              checkForQuest={checkForQuest}
-              processSelfLink={processSelfLink}
-            />
-          );
-        })}
-      <Menu
-        log={log}
-        openedLinks={openedLinks}
-        knowledge={knowledge}
-        setKnowledge={setKnowledge}
-        autos={autos}
-        setAutos={setAutos}
-        quests={quests}
-        resurfaceArticle={resurfaceArticle}
-        setInfo={setInfo}
-        purchasedItems={purchasedItems}
-        setPurchasedItems={setPurchasedItems}
-      />
     </div>
   );
 }
