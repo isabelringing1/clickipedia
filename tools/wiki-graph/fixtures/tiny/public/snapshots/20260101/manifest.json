@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "snapshotId": "20260101",
+  "wiki": "tinywiki",
+  "dumpDate": "20260101",
+  "generator": {
+    "name": "wiki-graph",
+    "version": "0.1.0"
+  },
+  "sources": [
+    {
+      "table": "page",
+      "file": "tinywiki-20260101-page.sql",
+      "bytes": 4030,
+      "sha1": "1e1a08459a9072fa9f69bcbf5c75545807c4d7f3"
+    },
+    {
+      "table": "redirect",
+      "file": "tinywiki-20260101-redirect.sql",
+      "bytes": 1474,
+      "sha1": "3ba0693dc32263548b979bdd7db4d79ce7c287b0"
+    },
+    {
+      "table": "linktarget",
+      "file": "tinywiki-20260101-linktarget.sql",
+      "bytes": 1323,
+      "sha1": "48c114c30b5ed244cd231e7de583ff6ba95ec142"
+    },
+    {
+      "table": "pagelinks",
+      "file": "tinywiki-20260101-pagelinks.sql",
+      "bytes": 1331,
+      "sha1": "4bc1d8de1ebb33780076934744ee2ac36fefaad9"
+    }
+  ],
+  "counts": {
+    "articles": 10,
+    "edges": 12,
+    "redirectAliases": 4,
+    "unresolvedRedirects": 7,
+    "titleEntries": 14
+  },
+  "startArticle": {
+    "title": "Incremental_game",
+    "ordinal": 0
+  },
+  "adjacency": {
+    "dir": "adjacency",
+    "shardSize": 4,
+    "shardCount": 3,
+    "index": {
+      "path": "adjacency/index.bin",
+      "bytes": 124,
+      "sha256": "a1fcabd82f72e28efedb011643aa2f1722158588e19f41c1da0892080a1a4279"
+    }
+  },
+  "metadata": {
+    "dir": "metadata",
+    "shardSize": 3,
+    "shardCount": 4,
+    "index": {
+      "path": "metadata/index.bin",
+      "bytes": 160,
+      "sha256": "32e6e71fbaec91e9f2bc2b0b6e9f757dd91f6a2b1b379503a3a9f4084b115d7b"
+    }
+  },
+  "titles": {
+    "dir": "titles",
+    "bucketCount": 4,
+    "hash": "fnv1a32-fmix32",
+    "index": {
+      "path": "titles/index.bin",
+      "bytes": 160,
+      "sha256": "b9a4065da54f09130a483cd80f1868492fe9fd610abebe51f25fd1cb51878a24"
+    }
+  },
+  "reports": {
+    "connectivity": {
+      "path": "reports/connectivity.json",
+      "bytes": 2096,
+      "sha256": "fcef7719f374945a1878e90e57ed162ec78fa11d8890d8239fde15ceaa89649f"
+    },
+    "isolated": {
+      "path": "reports/isolated.bin",
+      "bytes": 4,
+      "sha256": "7aa8ca4a02506da9133d8f889678b76f716ce45d02e22fdb7b70a15e56a0eff8"
+    },
+    "unreachableFromStart": {
+      "path": "reports/unreachable-from-start.bin",
+      "bytes": 16,
+      "sha256": "a56904dc693ae9956c3a7ddda9e2109050928cef0927792a0b7fab42ab672939"
+    },
+    "zeroIndegree": {
+      "path": "reports/zero-indegree.bin",
+      "bytes": 8,
+      "sha256": "f1833c11f88585608c320b53224d2642b97af5fdb9cae59c13fcab53f37c4b06"
+    }
+  }
+}

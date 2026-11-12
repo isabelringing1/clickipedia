@@ -2,11 +2,15 @@ import Log from "./Log";
 import Progress from "./Progress";
 import Quests from "./Quests";
 import Shop from "./Shop";
+import ScrollRegion from "./ScrollRegion";
 
 function Menu(props) {
   const {
-    log,
-    openedLinks,
+    history,
+    rootEntry,
+    visitedCount,
+    articleCount,
+    automationStatus,
     knowledge,
     setKnowledge,
     autos,
@@ -17,13 +21,15 @@ function Menu(props) {
     purchasedItems,
     setPurchasedItems,
   } = props;
-  const hasOpenedArticle = Object.keys(openedLinks).length > 1;
+  const hasOpenedArticle = visitedCount > 1;
   const hasOpenQuest = Object.values(quests).some((quest) => !quest.complete);
 
   return (
     <div id="menu">
       <Progress
-        openedLinks={openedLinks}
+        visitedCount={visitedCount}
+        articleCount={articleCount}
+        automationStatus={automationStatus}
         knowledge={knowledge}
         autos={autos}
       />
@@ -38,7 +44,6 @@ function Menu(props) {
       <Shop
         knowledge={knowledge}
         setKnowledge={setKnowledge}
-        autos={autos}
         setAutos={setAutos}
         setInfo={setInfo}
         purchasedItems={purchasedItems}
@@ -48,7 +53,13 @@ function Menu(props) {
       {hasOpenedArticle && (
         <section className="menu-panel history-panel">
           <h2>History</h2>
-          <Log log={log} resurfaceArticle={resurfaceArticle} />
+          <ScrollRegion className="history-scroll-region">
+            <Log
+              history={history}
+              rootEntry={rootEntry}
+              resurfaceArticle={resurfaceArticle}
+            />
+          </ScrollRegion>
         </section>
       )}
     </div>

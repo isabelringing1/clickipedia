@@ -1,5 +1,38 @@
+import { useRef, useState } from "react";
+
+// "20261001" -> "2026-10-01"
+function formatDumpDate(dumpDate) {
+  return /^\d{8}$/.test(dumpDate)
+    ? `${dumpDate.slice(0, 4)}-${dumpDate.slice(4, 6)}-${dumpDate.slice(6)}`
+    : dumpDate;
+}
+
 function Info(props) {
-  const { info, setInfo, reset } = props;
+  const {
+    info,
+    setInfo,
+    reset,
+    exportSave,
+    importSave,
+    snapshot,
+    savesPersist,
+  } = props;
+  const fileInput = useRef(null);
+  const [notice, setNotice] = useState("");
+
+  const onFileChosen = async (e) => {
+    const file = e.target.files[0];
+    // Allow choosing the same file again after a failed attempt.
+    e.target.value = "";
+    if (!file) {
+      return;
+    }
+    setNotice("");
+    const problem = await importSave(file);
+    if (problem) {
+      setNotice(problem);
+    }
+  };
 
   var infoHtml = (
     <div className="info-div">
@@ -17,9 +50,40 @@ function Info(props) {
           improvements. Thanks for playing!
         </i>
       </div>
-      <button className="reset-button" onClick={reset}>
-        Reset Game
-      </button>
+      <div className="info-text info-note">
+        Your game uses the links of English Wikipedia as of{" "}
+        {formatDumpDate(snapshot.dumpDate)} (
+        {snapshot.counts.articles.toLocaleString()} articles). Progress is saved
+        in this browser.
+      </div>
+      {!savesPersist && (
+        <div className="info-text info-note red">
+          This browser is not keeping saves. Export your save to keep your
+          progress.
+        </div>
+      )}
+      {notice != "" && <div className="info-text info-note red">{notice}</div>}
+      <div className="info-actions">
+        <button className="info-action" onClick={exportSave}>
+          Export Save
+        </button>
+        <button
+          className="info-action"
+          onClick={() => fileInput.current.click()}
+        >
+          Import Save
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: "none" }}
+          onChange={onFileChosen}
+        />
+        <button className="reset-button" onClick={reset}>
+          Reset Game
+        </button>
+      </div>
     </div>
   );
 
@@ -43,6 +107,7 @@ function Info(props) {
     if (e.target.closest(".info-div")) {
       return;
     }
+    setNotice("");
     setInfo("");
   };
 

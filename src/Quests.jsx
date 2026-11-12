@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 function Quests(props) {
   const { quests } = props;
 
@@ -22,4 +24,4 @@ function Quests(props) {
   );
 }
 
-export default Quests;
+export default memo(Quests);

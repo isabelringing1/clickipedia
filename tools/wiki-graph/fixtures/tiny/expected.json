@@ -1,0 +1,94 @@
+{
+  "description": "Hand-written expectations for the fixture wiki in dumps/. Checked by the Rust builder tests and the browser client tests, so neither side can drift from the other. Do not regenerate this file from build output.",
+  "snapshotId": "20260101",
+  "wiki": "tinywiki",
+  "dumpDate": "20260101",
+  "format": {
+    "adjacencyShardSize": 4,
+    "metadataShardSize": 3,
+    "titleBuckets": 4
+  },
+  "startArticle": { "title": "Incremental_game", "ordinal": 0 },
+  "articles": [
+    { "ordinal": 0, "pageId": 1, "title": "Incremental_game", "links": [1, 2, 4] },
+    { "ordinal": 1, "pageId": 2, "title": "Cookie_Clicker", "links": [0, 3, 7] },
+    { "ordinal": 2, "pageId": 7, "title": "It's_a_\"Quote\"", "links": [0] },
+    { "ordinal": 3, "pageId": 8, "title": "Back\\slash", "links": [4] },
+    { "ordinal": 4, "pageId": 9, "title": "Caf\u00e9", "links": [7] },
+    { "ordinal": 5, "pageId": 11, "title": "Orphan", "links": [1] },
+    { "ordinal": 6, "pageId": 12, "title": "Island", "links": [] },
+    { "ordinal": 7, "pageId": 16, "title": "Dead_end", "links": [] },
+    { "ordinal": 8, "pageId": 19, "title": "Twin_A", "links": [9] },
+    { "ordinal": 9, "pageId": 20, "title": "Twin_B", "links": [8] }
+  ],
+  "aliases": {
+    "Idle_game": 0,
+    "Clicker": 0,
+    "Cafe": 4,
+    "Section_redirect": 1
+  },
+  "notFound": [
+    "Loop_A",
+    "Loop_B",
+    "Dangling_redirect",
+    "To_talk",
+    "Interwiki_redirect",
+    "Self_redirect",
+    "Broken_redirect_flag",
+    "Nonexistent_page",
+    "Huge_id_red_link",
+    "Cookie_clicker",
+    "INCREMENTAL_GAME",
+    "Games",
+    "Category:Games",
+    "Infobox",
+    "Talk:Incremental_game",
+    "Random"
+  ],
+  "lookups": [
+    { "input": "incremental game", "ordinal": 0, "isRedirect": false },
+    { "input": "Incremental game#History", "ordinal": 0, "isRedirect": false },
+    { "input": "idle game", "ordinal": 0, "isRedirect": true },
+    { "input": "cookie Clicker", "ordinal": 1, "isRedirect": false },
+    { "input": "Cafe\u0301", "ordinal": 4, "isRedirect": false },
+    { "input": "cafe", "ordinal": 4, "isRedirect": true },
+    { "input": "it's a \"Quote\"", "ordinal": 2, "isRedirect": false },
+    { "input": "Back\\slash", "ordinal": 3, "isRedirect": false },
+    { "input": "Section redirect", "ordinal": 1, "isRedirect": true }
+  ],
+  "counts": {
+    "articles": 10,
+    "edges": 12,
+    "redirectAliases": 4,
+    "unresolvedRedirects": 7,
+    "titleEntries": 14
+  },
+  "redirectStats": {
+    "redirectPages": 11,
+    "aliases": 4,
+    "missingRow": 1,
+    "noUsableTarget": 3,
+    "unresolvedChain": 3
+  },
+  "linkStats": {
+    "rows": 29,
+    "sourceOtherNamespace": 3,
+    "targetUnresolved": 6,
+    "sourceNotArticle": 3,
+    "selfLinks": 2,
+    "emitted": 15,
+    "unique": 12
+  },
+  "connectivity": {
+    "zeroIndegree": [5, 6],
+    "isolated": [6],
+    "reachableFromStart": 6,
+    "unreachableFromStart": [5, 6, 8, 9],
+    "componentCount": 7,
+    "largestComponent": 3,
+    "startInLargestComponent": true,
+    "topComponentSizes": [3, 2, 1, 1, 1, 1, 1],
+    "maxOutDegree": { "ordinal": 0, "degree": 3 },
+    "maxInDegree": { "ordinal": 0, "degree": 2 }
+  }
+}

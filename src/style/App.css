@@ -101,12 +101,13 @@ body {
   cursor: pointer;
   background: white;
   position: absolute;
-  filter: drop-shadow(1px 2px 4px rgba(0, 0, 0, 0.35));
+  box-shadow: 1px 2px 4px rgba(0, 0, 0, 0.35);
   -webkit-user-select: none; /* Safari */
   -moz-user-select: none; /* Firefox */
   -ms-user-select: none; /* IE 10+ */
   user-select: none;
   border-radius: 0.2vh;
+  border: 1px solid rgba(0, 0, 0, 0.4);
   max-width: calc(100% - 24px);
   max-height: calc(100% - 24px);
 }
@@ -120,31 +121,95 @@ body {
 }
 
 #article-0 {
-  filter: none;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
   width: min(720px, 58%) !important;
   height: 100% !important;
+  max-height: 100%;
   position: absolute;
   top: 0;
   left: 50%;
   bottom: 0;
   transform: translateX(-50%);
-  overflow-y: auto;
+  overflow: hidden;
   padding: 0 24px 12px;
 }
 
-.article-content {
+.scroll-region {
+  position: relative;
+  overflow: hidden;
+}
+
+.scroll-region-content {
+  height: 100%;
   min-height: 0;
   overflow-y: auto;
 }
 
-.article-content:not(#article-content-0) {
+.article-scroll-region {
   flex: 1;
+  min-height: 0;
+}
+
+.article-content {
+  min-height: 100%;
+}
+
+.article .article-content p {
+  margin-top: 0.4em;
+  margin-bottom: 0.4em;
+}
+
+.article-content:not(#article-content-0) {
   padding-right: 24px;
 }
 
-.article-header:not(#article-header-0) {
+.article-header {
   flex: 0 0 auto;
+}
+
+.article-header:not(#article-header-0) {
   margin-right: 24px;
+  padding-right: 32px;
+}
+
+.article-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #72777d;
+  font: 24px/1 sans-serif;
+  cursor: pointer;
+}
+
+.article-close:hover {
+  color: #202122;
+}
+
+.scroll-fade {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 4;
+  height: 50px;
+  pointer-events: none;
+}
+
+.scroll-fade-top {
+  top: 0;
+  background: linear-gradient(to bottom, white, rgba(255, 255, 255, 0));
+}
+
+.scroll-fade-bottom {
+  bottom: 0;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), white);
 }
 
 .highlight {
@@ -163,66 +228,100 @@ body {
   }
 }
 
-.loading {
-  height: auto !important;
+.article-preview-placeholder {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 32px 24px 14px 0;
+  overflow: hidden;
 }
 
-.condensed {
-  line-height: 2.6vh;
-  color: #5a5a5a;
-  height: auto !important;
-  max-width: calc(100% - 24px) !important;
+/* Dormant auto-opened windows are a single painted placeholder rather than
+   twenty individual line elements inside a resizable component. */
+.article.condensed {
+  width: min(1000px, calc(100% - 24px));
+  height: 78%;
+}
+
+.article.condensed .article-preview-placeholder {
+  margin: 32px 24px 14px 0;
+  padding: 0;
+  background:
+    linear-gradient(#dedede, #dedede) right top / 24% 30% no-repeat,
+    repeating-linear-gradient(
+      to bottom,
+      #e5e5e5 0 14px,
+      transparent 14px 28px
+    );
+}
+
+.article-preview-top {
+  display: flex;
+  align-items: flex-start;
+  gap: clamp(20px, 3vw, 40px);
+}
+
+.article-preview-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.article-preview-line {
+  flex: 0 0 14px;
+  width: 100%;
+  border-radius: 4px;
+  background: #e5e5e5;
+}
+
+.article-preview-line:nth-child(3n) {
+  width: 94%;
+}
+
+.article-preview-line:nth-child(4n) {
+  width: 97%;
+}
+
+.article-preview-image {
+  flex: 0 0 clamp(140px, 24%, 220px);
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  background: #dedede;
 }
 
 .article:not(#article-0):not(.highlight) {
-  animation: fadeShadow 1s ease-in-out forwards;
+  animation: fadeShadow 1s ease-in-out;
 }
 
 @keyframes fadeShadow {
   from {
-    border: 2px solid greenyellow;
+    border-color: yellow;
   }
   to {
-    border: 2px solid rgba(255, 255, 255, 0);
+    border-color: rgba(0, 0, 0, 0.4);
   }
-}
-
-.full {
-  width: 75% !important;
-  height: 78% !important;
 }
 
 .current {
-  filter: drop-shadow(1px 2px 4px rgba(0, 0, 0, 0.55))
-    drop-shadow(1px 2px 4px rgba(234, 255, 0, 0.35));
-}
-
-@font-face {
-  font-family: "Linux Libertine";
-  src: local("MyFont"), url(./LinLibertine_R.ttf) format("tff");
+  box-shadow:
+    1px 2px 4px rgba(0, 0, 0, 0.55),
+    1px 2px 8px rgba(234, 255, 0, 0.35);
 }
 
 .article-header {
   top: 0;
   background-color: white;
   z-index: 1;
-  font-family: "Linux Libertine", "Georgia", "Times", "Source Serif 4", serif;
+  font-family: "Georgia", "Times New Roman", serif;
   border-bottom: solid 0.5px #003366;
   font-size: max(25px, 3vh);
-  padding-top: 1vh;
-  line-height: max(30px, 3.5vh);
-}
-
-.article-header:not(.condensed-header) {
   padding-top: 4.5vh;
-}
-
-.expand-text {
-  color: gray;
-  padding-top: 0vh;
-  padding-bottom: 0vh;
-  font-size: 1.5vh;
-  font-family: sans-serif;
+  line-height: max(30px, 3.5vh);
 }
 
 .article-header:not(#article-header-0) {
@@ -258,14 +357,12 @@ body {
 
 #log {
   width: 100%;
-  height: 100%;
-  min-height: 120px;
+  min-height: 100%;
   background-color: white;
   color: black;
   border: 0;
   padding: 12px;
   font-family: "Helvetica";
-  overflow-y: auto;
 }
 
 .log-article {
@@ -311,8 +408,10 @@ body {
   position: absolute;
   color: green;
   right: 8px;
+  bottom: 43vh;
   font-weight: bold;
   opacity: 0;
+  pointer-events: none;
 }
 
 .negative {
@@ -327,21 +426,21 @@ body {
 @keyframes float-up {
   0% {
     opacity: 1;
-    bottom: 43vh;
+    transform: translateY(0);
   }
   10% {
     opacity: 1;
   }
   60% {
-    bottom: 44vh;
+    transform: translateY(-1vh);
   }
   80% {
     opacity: 1;
-    bottom: 44vh;
+    transform: translateY(-1vh);
   }
   100% {
     opacity: 0;
-    bottom: 44vh;
+    transform: translateY(-1vh);
   }
 }
 
@@ -409,14 +508,15 @@ body {
 .menu-panel {
   width: 100%;
   min-width: 0;
-  border: 1px solid #54595d;
+  border: 0;
   background: white;
   padding: 10px;
 }
 
 .menu-panel h2 {
   margin: 0 0 10px;
-  font-family: "Linux Libertine", "Georgia", serif;
+  font-family: "Georgia", "Times New Roman", serif;
+  font-weight: 400;
   font-size: 21px;
   line-height: 1.1;
 }
@@ -442,9 +542,13 @@ body {
   grid-row: 4;
 }
 
+.history-scroll-region {
+  flex: 1;
+  min-height: 0;
+}
+
 .quests-panel .quests,
-.shop-panel .shop,
-.history-panel #log {
+.shop-panel .shop {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -555,4 +659,56 @@ body {
 
 .reset-button:hover {
   background-color: #d46868;
+}
+
+.info-note {
+  font-size: 1.7vh;
+  line-height: 2.3vh;
+  color: rgb(0, 0, 0, 0.75);
+}
+
+.info-note.red {
+  color: rgb(214, 40, 40);
+}
+
+.info-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1vh;
+}
+
+.info-action {
+  background-color: #eaecf0;
+  border-radius: 0.4vh;
+  border: 2px solid #a2a9b1;
+  font-size: 1.7vh;
+  padding: 0.5vh;
+  color: black;
+}
+
+.info-action:hover {
+  background-color: #c8ccd1;
+}
+
+.boot-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3vh;
+  width: min(60vh, 90vw);
+  text-align: center;
+}
+
+.boot-logo {
+  width: min(240px, 60%);
+  object-fit: contain;
+}
+
+.boot-message {
+  line-height: 1.5;
+}
+
+.boot-screen .info-actions {
+  justify-content: center;
 }

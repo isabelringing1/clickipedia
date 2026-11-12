@@ -1,0 +1,270 @@
+{
+  "description": "Shared vectors for title normalization and the title-bucket hash. Checked by both the Rust builder and the browser client. Hash values were computed by an independent Python implementation.",
+  "hashName": "fnv1a32-fmix32",
+  "normalize": [
+    {
+      "input": "Incremental_game",
+      "expected": "Incremental_game"
+    },
+    {
+      "input": "incremental game",
+      "expected": "Incremental_game"
+    },
+    {
+      "input": "Incremental game",
+      "expected": "Incremental_game"
+    },
+    {
+      "input": "  Cookie__ Clicker_ ",
+      "expected": "Cookie_Clicker"
+    },
+    {
+      "input": "Idle game#History",
+      "expected": "Idle_game"
+    },
+    {
+      "input": "Idle_game#",
+      "expected": "Idle_game"
+    },
+    {
+      "input": ":Cookie Clicker",
+      "expected": "Cookie_Clicker"
+    },
+    {
+      "input": ": _Cookie Clicker",
+      "expected": "Cookie_Clicker"
+    },
+    {
+      "input": "iPhone",
+      "expected": "IPhone"
+    },
+    {
+      "input": "2001: A Space Odyssey",
+      "expected": "2001:_A_Space_Odyssey"
+    },
+    {
+      "input": "It's_a_\"Quote\"",
+      "expected": "It's_a_\"Quote\""
+    },
+    {
+      "input": "Back\\slash",
+      "expected": "Back\\slash"
+    },
+    {
+      "input": "AC/DC",
+      "expected": "AC/DC"
+    },
+    {
+      "input": "C++",
+      "expected": "C++"
+    },
+    {
+      "input": "100%",
+      "expected": "100%"
+    },
+    {
+      "input": "\u00e9cole",
+      "expected": "\u00c9cole"
+    },
+    {
+      "input": "Cafe\u0301",
+      "expected": "Caf\u00e9"
+    },
+    {
+      "input": "Caf\u00e9",
+      "expected": "Caf\u00e9"
+    },
+    {
+      "input": "\u00dfeta",
+      "expected": "\u00dfeta"
+    },
+    {
+      "input": "\u01c6",
+      "expected": "\u01c4"
+    },
+    {
+      "input": "a\u00a0b",
+      "expected": "A_b"
+    },
+    {
+      "input": "a\u2003\u3000b",
+      "expected": "A_b"
+    },
+    {
+      "input": "\u200eFoo\u200f",
+      "expected": "Foo"
+    },
+    {
+      "input": "\u65e5\u672c\u8a9e \u30c6\u30b9\u30c8",
+      "expected": "\u65e5\u672c\u8a9e_\u30c6\u30b9\u30c8"
+    },
+    {
+      "input": "\ud835\udd18nicode",
+      "expected": "\ud835\udd18nicode"
+    },
+    {
+      "input": "\u03c3\u03af\u03b3\u03bc\u03b1",
+      "expected": "\u03a3\u03af\u03b3\u03bc\u03b1"
+    },
+    {
+      "input": "",
+      "expected": null
+    },
+    {
+      "input": " _ ",
+      "expected": null
+    },
+    {
+      "input": "#fragment",
+      "expected": null
+    },
+    {
+      "input": ":",
+      "expected": null
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": "Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expected": null
+    },
+    {
+      "input": "\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5",
+      "expected": "\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5"
+    },
+    {
+      "input": "\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5\u65e5",
+      "expected": null
+    }
+  ],
+  "hash": [
+    {
+      "title": "",
+      "hash": 2872998923,
+      "bucketOf4": 3,
+      "bucketOf8192": 7179
+    },
+    {
+      "title": "A",
+      "hash": 1294499476,
+      "bucketOf4": 0,
+      "bucketOf8192": 7828
+    },
+    {
+      "title": "Incremental_game",
+      "hash": 2470646670,
+      "bucketOf4": 2,
+      "bucketOf8192": 5006
+    },
+    {
+      "title": "Incremental_Game",
+      "hash": 3240917476,
+      "bucketOf4": 0,
+      "bucketOf8192": 6628
+    },
+    {
+      "title": "Cookie_Clicker",
+      "hash": 2440726830,
+      "bucketOf4": 2,
+      "bucketOf8192": 2350
+    },
+    {
+      "title": "Idle_game",
+      "hash": 937666887,
+      "bucketOf4": 3,
+      "bucketOf8192": 2375
+    },
+    {
+      "title": "Clicker",
+      "hash": 2606136982,
+      "bucketOf4": 2,
+      "bucketOf8192": 7830
+    },
+    {
+      "title": "Caf\u00e9",
+      "hash": 792247095,
+      "bucketOf4": 3,
+      "bucketOf8192": 6967
+    },
+    {
+      "title": "Cafe",
+      "hash": 2239024628,
+      "bucketOf4": 0,
+      "bucketOf8192": 3572
+    },
+    {
+      "title": "It's_a_\"Quote\"",
+      "hash": 2819418023,
+      "bucketOf4": 3,
+      "bucketOf8192": 1959
+    },
+    {
+      "title": "Back\\slash",
+      "hash": 3319552020,
+      "bucketOf4": 0,
+      "bucketOf8192": 6164
+    },
+    {
+      "title": "Orphan",
+      "hash": 629593420,
+      "bucketOf4": 0,
+      "bucketOf8192": 5452
+    },
+    {
+      "title": "Island",
+      "hash": 1537727160,
+      "bucketOf4": 0,
+      "bucketOf8192": 6840
+    },
+    {
+      "title": "Dead_end",
+      "hash": 2506564258,
+      "bucketOf4": 2,
+      "bucketOf8192": 674
+    },
+    {
+      "title": "Twin_A",
+      "hash": 4242685275,
+      "bucketOf4": 3,
+      "bucketOf8192": 7515
+    },
+    {
+      "title": "Twin_B",
+      "hash": 3735871343,
+      "bucketOf4": 3,
+      "bucketOf8192": 8047
+    },
+    {
+      "title": "Section_redirect",
+      "hash": 3703838895,
+      "bucketOf4": 3,
+      "bucketOf8192": 6319
+    },
+    {
+      "title": "\u65e5\u672c\u8a9e_\u30c6\u30b9\u30c8",
+      "hash": 3675162214,
+      "bucketOf4": 2,
+      "bucketOf8192": 1638
+    },
+    {
+      "title": "\ud835\udd18nicode",
+      "hash": 4095447167,
+      "bucketOf4": 3,
+      "bucketOf8192": 4223
+    },
+    {
+      "title": "2001:_A_Space_Odyssey",
+      "hash": 1810456279,
+      "bucketOf4": 3,
+      "bucketOf8192": 7895
+    },
+    {
+      "title": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "hash": 2688858772,
+      "bucketOf4": 0,
+      "bucketOf8192": 6804
+    }
+  ]
+}

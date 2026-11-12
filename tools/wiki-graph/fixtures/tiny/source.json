@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "wiki": "tinywiki",
+  "dumpDate": "20260101",
+  "files": {
+    "linktarget": {
+      "file": "tinywiki-20260101-linktarget.sql",
+      "url": "fixture://tinywiki/20260101/tinywiki-20260101-linktarget.sql",
+      "bytes": 1323,
+      "sha1": "48c114c30b5ed244cd231e7de583ff6ba95ec142"
+    },
+    "page": {
+      "file": "tinywiki-20260101-page.sql",
+      "url": "fixture://tinywiki/20260101/tinywiki-20260101-page.sql",
+      "bytes": 4030,
+      "sha1": "1e1a08459a9072fa9f69bcbf5c75545807c4d7f3"
+    },
+    "pagelinks": {
+      "file": "tinywiki-20260101-pagelinks.sql",
+      "url": "fixture://tinywiki/20260101/tinywiki-20260101-pagelinks.sql",
+      "bytes": 1331,
+      "sha1": "4bc1d8de1ebb33780076934744ee2ac36fefaad9"
+    },
+    "redirect": {
+      "file": "tinywiki-20260101-redirect.sql",
+      "url": "fixture://tinywiki/20260101/tinywiki-20260101-redirect.sql",
+      "bytes": 1474,
+      "sha1": "3ba0693dc32263548b979bdd7db4d79ce7c287b0"
+    }
+  }
+}

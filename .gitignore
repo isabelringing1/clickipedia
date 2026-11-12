@@ -137,3 +137,7 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Wikipedia graph pipeline: build output, downloaded dumps, sort runs, artifacts
+tools/wiki-graph/target/
+tools/wiki-graph/data.nosync/

@@ -1,0 +1,34 @@
+[package]
+name = "wiki-graph"
+version = "0.1.0"
+edition = "2021"
+description = "Builds browser-readable Wikipedia hyperlink graph shards for Clickipedia"
+publish = false
+
+[workspace]
+
+[lib]
+name = "wiki_graph"
+path = "src/lib.rs"
+
+[[bin]]
+name = "wiki-graph"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+flate2 = "1"
+hashbrown = "0.15"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha1 = "0.10"
+sha2 = "0.10"
+tempfile = "3"
+unicode-normalization = "0.1"
+ureq = "2"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 4

@@ -5,7 +5,6 @@ function Shop(props) {
   const {
     knowledge,
     setKnowledge,
-    autos,
     setAutos,
     setInfo,
     purchasedItems,
@@ -14,22 +13,27 @@ function Shop(props) {
   var cards = shopJson["items"];
 
   const onBuy = (card) => {
+    // Updates are relative to the current value: automation changes
+    // knowledge many times a second, so a value captured at render time may
+    // already be out of date when the player clicks.
     if (card.category == "auto") {
-      setAutos(autos + 1);
+      setAutos((current) => current + 1);
     } else if (card.category == "cluster") {
       setInfo("ending");
     } else {
       console.error("Did not recognize card category " + card.category);
       return;
     }
-    setKnowledge(knowledge - card.cost);
-    var newShopDict = { ...purchasedItems };
-    newShopDict[card.id] = true;
-    if (card.next) {
-      var nextCardId = cards[card.next];
-      newShopDict[nextCardId] = { complete: false, quest: cards[nextCardId] };
-    }
-    setPurchasedItems(newShopDict);
+    setKnowledge((current) => current - card.cost);
+    setPurchasedItems((current) => {
+      var newShopDict = { ...current };
+      newShopDict[card.id] = true;
+      if (card.next) {
+        var nextCardId = cards[card.next];
+        newShopDict[nextCardId] = { complete: false, quest: cards[nextCardId] };
+      }
+      return newShopDict;
+    });
   };
 
   const shouldShowCard = (card) => {

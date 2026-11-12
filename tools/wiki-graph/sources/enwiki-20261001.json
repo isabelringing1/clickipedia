@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "wiki": "enwiki",
+  "dumpDate": "20261001",
+  "files": {
+    "linktarget": {
+      "file": "enwiki-20261001-linktarget.sql.gz",
+      "url": "https://dumps.wikimedia.org/enwiki/20261001/enwiki-20261001-linktarget.sql.gz",
+      "bytes": 1443058692,
+      "sha1": "4afaebb02b3e48ddc15c145eb68baeacbd4629f7",
+      "md5": "9dd1058e02152be59cc3879a4e1eb06c"
+    },
+    "page": {
+      "file": "enwiki-20261001-page.sql.gz",
+      "url": "https://dumps.wikimedia.org/enwiki/20261001/enwiki-20261001-page.sql.gz",
+      "bytes": 2432679945,
+      "sha1": "08c19861e908c6f324ad091687ea19bff8d62bb4",
+      "md5": "c0b4cfd8479b0b8be33c41155ceed64d"
+    },
+    "pagelinks": {
+      "file": "enwiki-20261001-pagelinks.sql.gz",
+      "url": "https://dumps.wikimedia.org/enwiki/20261001/enwiki-20261001-pagelinks.sql.gz",
+      "bytes": 7167161183,
+      "sha1": "0b5cf497145fae7816932fd594b61567b5e11b92",
+      "md5": "c736b3718ccae642fff4f55c038bb2e5"
+    },
+    "redirect": {
+      "file": "enwiki-20261001-redirect.sql.gz",
+      "url": "https://dumps.wikimedia.org/enwiki/20261001/enwiki-20261001-redirect.sql.gz",
+      "bytes": 187638901,
+      "sha1": "701d2aa19e4028fbfe78ac2cc4b1d9c955ec0c9a",
+      "md5": "8b674c86515d96cf6e9bb29b6f3ecd4c"
+    }
+  }
+}

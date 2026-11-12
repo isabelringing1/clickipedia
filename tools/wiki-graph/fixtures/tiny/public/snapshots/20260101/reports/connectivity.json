@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "snapshotId": "20260101",
+  "articles": 10,
+  "edges": 12,
+  "start": {
+    "ordinal": 0,
+    "title": "Incremental_game",
+    "reachable": 6,
+    "unreachable": 4,
+    "componentSize": 3,
+    "inLargestComponent": true
+  },
+  "zeroIndegree": {
+    "count": 2,
+    "list": "reports/zero-indegree.bin",
+    "sample": [
+      {
+        "ordinal": 5,
+        "title": "Orphan"
+      },
+      {
+        "ordinal": 6,
+        "title": "Island"
+      }
+    ]
+  },
+  "isolated": {
+    "count": 1,
+    "list": "reports/isolated.bin",
+    "sample": [
+      {
+        "ordinal": 6,
+        "title": "Island"
+      }
+    ]
+  },
+  "unreachableFromStart": {
+    "count": 4,
+    "list": "reports/unreachable-from-start.bin",
+    "sample": [
+      {
+        "ordinal": 5,
+        "title": "Orphan"
+      },
+      {
+        "ordinal": 6,
+        "title": "Island"
+      },
+      {
+        "ordinal": 8,
+        "title": "Twin_A"
+      },
+      {
+        "ordinal": 9,
+        "title": "Twin_B"
+      }
+    ]
+  },
+  "stronglyConnectedComponents": {
+    "count": 7,
+    "largest": 3,
+    "sizeHistogram": [
+      {
+        "minSize": 1,
+        "maxSize": 1,
+        "components": 5,
+        "articles": 5
+      },
+      {
+        "minSize": 2,
+        "maxSize": 10,
+        "components": 2,
+        "articles": 5
+      },
+      {
+        "minSize": 11,
+        "maxSize": 100,
+        "components": 0,
+        "articles": 0
+      },
+      {
+        "minSize": 101,
+        "maxSize": 1000,
+        "components": 0,
+        "articles": 0
+      },
+      {
+        "minSize": 1001,
+        "maxSize": 100000,
+        "components": 0,
+        "articles": 0
+      },
+      {
+        "minSize": 100001,
+        "maxSize": null,
+        "components": 0,
+        "articles": 0
+      }
+    ],
+    "topSizes": [
+      3,
+      2,
+      1,
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "degrees": {
+    "maxOut": {
+      "ordinal": 0,
+      "title": "Incremental_game",
+      "degree": 3
+    },
+    "maxIn": {
+      "ordinal": 0,
+      "title": "Incremental_game",
+      "degree": 2
+    }
+  }
+}
