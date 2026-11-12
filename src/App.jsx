@@ -4,6 +4,7 @@ import questsJson from "./quests.json";
 
 import Article from "./Article";
 import Menu from "./Menu";
+import TopicTaxonomy from "./TopicTaxonomy";
 import Logo from "/Logo.png";
 import Debug from "./Debug";
 import Error from "./Error";
@@ -210,6 +211,7 @@ function Game({ session }) {
   const [automationStatus, setAutomationStatus] = useState("running");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [activeView, setActiveView] = useState("articles");
 
   // Articles are identified by their history sequence number; 0 is the
   // starting article, which is always present.
@@ -477,7 +479,10 @@ function Game({ session }) {
 
   return (
     <div id="content">
-      <Debug autos={autos} setAutos={setAutos} />
+      <Debug
+        autos={autos}
+        setAutos={setAutos}
+      />
       <Info
         info={info}
         setInfo={setInfo}
@@ -491,64 +496,105 @@ function Game({ session }) {
 
       <div className="game-shell">
         <div className="game-header">
-          <button
-            className="info-button"
-            onClick={() => {
-              setInfo("info");
-            }}
-            aria-label="About Clickipedia"
-          >
-            ?
-          </button>
-          <img src={Logo} className="game-logo" alt="Clickipedia" />
+          <div className="game-header-brand">
+            <button
+              className="info-button"
+              onClick={() => {
+                setInfo("info");
+              }}
+              aria-label="About Clickipedia"
+            >
+              ?
+            </button>
+            <img src={Logo} className="game-logo" alt="Clickipedia" />
+          </div>
+          <nav className="view-tabs" aria-label="Game view">
+            <button
+              type="button"
+              className={`view-tab${activeView === "articles" ? " active" : ""}`}
+              aria-pressed={activeView === "articles"}
+              onClick={() => setActiveView("articles")}
+            >
+              Articles
+            </button>
+            <button
+              type="button"
+              className={`view-tab${activeView === "topics" ? " active" : ""}`}
+              aria-pressed={activeView === "topics"}
+              onClick={() => setActiveView("topics")}
+            >
+              Topics
+            </button>
+          </nav>
         </div>
 
-        <main className="game-stage" id="game-stage">
-          {[rootEntry, ...articles].map((entry) => {
-            const id = entry.seq;
-            if (
-              closedArticles.has(id) ||
-              (id != 0 && id != currentArticle && !recentArticles.has(id))
-            ) {
-              //don't render more than 50
-              return null;
-            }
-            return (
-              <Article
-                isCurrent={id == currentArticle && id != 0}
-                topic={entry.title}
-                ordinal={entry.ordinal}
-                key={"article-" + id}
-                id={id}
-                spawnIndex={entry.spawn}
-                stackIndex={id}
-                resurfaceArticle={resurfaceArticle}
-                closeArticle={closeArticle}
-                processInvalidArticle={processInvalidArticle}
-                openLink={openLink}
-                checkForQuest={checkForQuest}
-                processSelfLink={processSelfLink}
-              />
-            );
-          })}
-        </main>
+        <div className="view-viewport">
+          <div className={`view-track ${activeView}`}>
+            <section
+              className="game-view articles-view"
+              aria-label="Articles"
+              aria-hidden={activeView !== "articles"}
+              inert={activeView !== "articles"}
+            >
+              <main className="game-stage" id="game-stage">
+                {[rootEntry, ...articles].map((entry) => {
+                  const id = entry.seq;
+                  if (
+                    closedArticles.has(id) ||
+                    (id != 0 &&
+                      id != currentArticle &&
+                      !recentArticles.has(id))
+                  ) {
+                    //don't render more than 50
+                    return null;
+                  }
+                  return (
+                    <Article
+                      isCurrent={id == currentArticle && id != 0}
+                      topic={entry.title}
+                      ordinal={entry.ordinal}
+                      key={"article-" + id}
+                      id={id}
+                      spawnIndex={entry.spawn}
+                      stackIndex={id}
+                      resurfaceArticle={resurfaceArticle}
+                      closeArticle={closeArticle}
+                      processInvalidArticle={processInvalidArticle}
+                      openLink={openLink}
+                      checkForQuest={checkForQuest}
+                      processSelfLink={processSelfLink}
+                    />
+                  );
+                })}
+              </main>
 
-        <Menu
-          history={history}
-          rootEntry={rootEntry}
-          visitedCount={visitedCount}
-          articleCount={session.articleCount}
-          automationStatus={automationStatus}
-          knowledge={knowledge}
-          setKnowledge={setKnowledge}
-          autos={autos}
-          setAutos={setAutos}
-          quests={quests}
-          resurfaceArticle={resurfaceArticle}
-          setInfo={setInfo}
-          purchasedItems={purchasedItems}
-          setPurchasedItems={setPurchasedItems}
-        />
+              <Menu
+                history={history}
+                rootEntry={rootEntry}
+                visitedCount={visitedCount}
+                articleCount={session.articleCount}
+                automationStatus={automationStatus}
+                knowledge={knowledge}
+                setKnowledge={setKnowledge}
+                autos={autos}
+                setAutos={setAutos}
+                quests={quests}
+                resurfaceArticle={resurfaceArticle}
+                setInfo={setInfo}
+                purchasedItems={purchasedItems}
+                setPurchasedItems={setPurchasedItems}
+              />
+            </section>
+            <section
+              className="game-view topics-view"
+              aria-label="Topics"
+              aria-hidden={activeView !== "topics"}
+              inert={activeView !== "topics"}
+            >
+              <TopicTaxonomy />
+            </section>
+          </div>
+        </div>
       </div>
     </div>
   );

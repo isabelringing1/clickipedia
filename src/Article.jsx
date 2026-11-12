@@ -80,7 +80,130 @@ const CondensedArticle = memo(function CondensedArticle({
   resurfaceArticle,
   closeArticle,
 }) {
-  const [position] = useState(() => getSpawnPosition(spawnIndex));
+  const [position, setPosition] = useState(() => getSpawnPosition(spawnIndex));
+  const dragState = useRef(null);
+  const dragFrame = useRef(null);
+  const suppressClick = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (dragFrame.current != null) {
+        cancelAnimationFrame(dragFrame.current);
+      }
+    };
+  }, []);
+
+  const updateDragTransform = () => {
+    dragFrame.current = null;
+    const drag = dragState.current;
+    if (!drag || !drag.moved) {
+      return;
+    }
+
+    const nextPosition = containPosition(
+      drag.article,
+      drag.startLeft + drag.clientX - drag.startX,
+      drag.startTop + drag.clientY - drag.startY,
+    );
+    drag.article.style.transform = `translate3d(${
+      nextPosition.left - drag.startLeft
+    }px, ${nextPosition.top - drag.startTop}px, 0)`;
+  };
+
+  const startDrag = (event) => {
+    if (event.button != 0) {
+      return;
+    }
+
+    const article = event.currentTarget.closest(".article");
+    if (!article) {
+      return;
+    }
+
+    suppressClick.current = false;
+    dragState.current = {
+      article,
+      header: event.currentTarget,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      startLeft: position.left,
+      startTop: position.top,
+      moved: false,
+    };
+    article.classList.add("dragging");
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const dragArticle = (event) => {
+    const drag = dragState.current;
+    if (!drag || event.pointerId != drag.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    drag.clientX = event.clientX;
+    drag.clientY = event.clientY;
+    if (
+      !drag.moved &&
+      Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >=
+        DRAG_THRESHOLD
+    ) {
+      drag.moved = true;
+      suppressClick.current = true;
+    }
+    if (drag.moved && dragFrame.current == null) {
+      dragFrame.current = requestAnimationFrame(updateDragTransform);
+    }
+  };
+
+  const endDrag = (event) => {
+    const drag = dragState.current;
+    if (!drag || event.pointerId != drag.pointerId) {
+      return;
+    }
+
+    if (dragFrame.current != null) {
+      cancelAnimationFrame(dragFrame.current);
+      dragFrame.current = null;
+    }
+
+    const endX = event.type === "pointercancel" ? drag.clientX : event.clientX;
+    const endY = event.type === "pointercancel" ? drag.clientY : event.clientY;
+    const moved =
+      drag.moved ||
+      Math.hypot(endX - drag.startX, endY - drag.startY) >= DRAG_THRESHOLD;
+
+    if (moved) {
+      const nextPosition = containPosition(
+        drag.article,
+        drag.startLeft + endX - drag.startX,
+        drag.startTop + endY - drag.startY,
+      );
+      drag.article.style.left = `${nextPosition.left}px`;
+      drag.article.style.top = `${nextPosition.top}px`;
+      drag.article.style.transform = "";
+      setPosition(nextPosition);
+
+      if (event.type === "pointercancel") {
+        suppressClick.current = false;
+      } else {
+        suppressClick.current = true;
+        setTimeout(() => {
+          suppressClick.current = false;
+        }, 0);
+      }
+    }
+
+    drag.article.classList.remove("dragging");
+    if (drag.header.hasPointerCapture(drag.pointerId)) {
+      drag.header.releasePointerCapture(drag.pointerId);
+    }
+    dragState.current = null;
+  };
+
   return (
     <div
       className={`article condensed ${topic}`}
@@ -90,7 +213,13 @@ const CondensedArticle = memo(function CondensedArticle({
         left: `${position.left}px`,
         zIndex: stackIndex,
       }}
-      onClick={() => resurfaceArticle(id)}
+      onClick={() => {
+        if (suppressClick.current) {
+          suppressClick.current = false;
+          return;
+        }
+        resurfaceArticle(id);
+      }}
     >
       <button
         className="article-close"
@@ -103,7 +232,15 @@ const CondensedArticle = memo(function CondensedArticle({
       >
         ×
       </button>
-      <div className="article-header condensed-header">{formatTopic(topic)}</div>
+      <div
+        className="article-header condensed-header"
+        onPointerDown={startDrag}
+        onPointerMove={dragArticle}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+      >
+        {formatTopic(topic)}
+      </div>
       <div className="article-preview-placeholder" aria-hidden="true"></div>
     </div>
   );
