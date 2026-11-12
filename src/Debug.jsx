@@ -1,54 +1,74 @@
-import { useState, useRef, useEffect } from "react";
-function Debug(props) {
-  const { setAutos, setKnowledge } = props;
+import { useEffect, useState } from "react";
 
-  var [showDebug, setShowDebug] = useState(false);
+const isLocalHost = () => {
+  const host = window.location.hostname;
+  return (
+    host === "localhost" ||
+    host === "::1" ||
+    host === "[::1]" ||
+    /^127(?:\.\d{1,3}){3}$/.test(host)
+  );
+};
 
-  const autosRef = useRef();
-  const knowledgeRef = useRef();
-  const devMode = false;
+function Debug({ autos, setAutos }) {
+  const [showDebug, setShowDebug] = useState(false);
+  const [autosInput, setAutosInput] = useState(String(autos));
+  const enabled = isLocalHost();
 
   useEffect(() => {
-    document.addEventListener("keydown", (event) => {
-      if (event.code === "KeyD" && devMode) {
-        toggleShowDebug();
-      }
-    });
-  }, []);
+    setAutosInput(String(autos));
+  }, [autos]);
 
-  const toggleShowDebug = () => {
-    setShowDebug((prevShowDebug) => !prevShowDebug);
+  useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+
+    const onKeyDown = (event) => {
+      const target = event.target;
+      const isEditing =
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT");
+
+      if (event.code === "KeyD" && !isEditing && !event.metaKey && !event.ctrlKey) {
+        setShowDebug((shown) => !shown);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [enabled]);
+
+  if (!enabled || !showDebug) {
+    return null;
+  }
+
+  const applyAutos = (event) => {
+    event.preventDefault();
+    const nextAutos = Number(autosInput);
+    if (Number.isInteger(nextAutos) && nextAutos >= 0) {
+      setAutos(nextAutos);
+    }
   };
 
   return (
-    showDebug && (
-      <div className="debug">
-        <div className="debug-entry">
-          <input type="number" ref={autosRef} />{" "}
-          <button
-            id="set-autos-button"
-            onClick={() => {
-              setAutos(parseInt(autosRef.current.value));
-            }}
-          >
-            {" "}
-            Set Autos{" "}
-          </button>
-        </div>
-        <div className="debug-entry">
-          <input type="number" ref={knowledgeRef} />{" "}
-          <button
-            id="set-knowledge-button"
-            onClick={() => {
-              setKnowledge(parseInt(knowledgeRef.current.value));
-            }}
-          >
-            {" "}
-            Set Knowledge{" "}
-          </button>
-        </div>
-      </div>
-    )
+    <aside className="debug" aria-label="Debug menu">
+      <form className="debug-entry" onSubmit={applyAutos}>
+        <label htmlFor="debug-autos">Auto openers</label>
+        <input
+          id="debug-autos"
+          type="number"
+          min="0"
+          step="1"
+          value={autosInput}
+          onChange={(event) => setAutosInput(event.target.value)}
+        />
+        <button type="submit">Set</button>
+      </form>
+    </aside>
   );
 }
 

@@ -477,7 +477,7 @@ function Game({ session }) {
 
   return (
     <div id="content">
-      <Debug setAutos={setAutos} setKnowledge={setKnowledge} />
+      <Debug autos={autos} setAutos={setAutos} />
       <Info
         info={info}
         setInfo={setInfo}

@@ -563,21 +563,38 @@ body {
 }
 
 .debug {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 30vw;
-  height: 20vw;
-  background-color: rgba(0, 0, 0, 0.409);
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
   z-index: 10000000;
-  padding: 2vh;
-  display: flex;
-  flex-direction: column;
-  align-items: start;
+  padding: 12px;
+  border: 1px solid #72777d;
+  border-radius: 6px;
+  background: rgba(32, 33, 34, 0.94);
+  color: white;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
 }
 
 .debug-entry {
-  width: 100%;
+  display: grid;
+  grid-template-columns: auto 90px auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.debug-entry input,
+.debug-entry button {
+  height: 30px;
+}
+
+.debug-entry input {
+  width: 90px;
+  padding: 4px 6px;
+}
+
+.debug-entry button {
+  padding: 4px 10px;
 }
 
 .info-container {
