@@ -28,6 +28,10 @@ pub struct SourceLock {
     pub dump_date: String,
     /// Keyed by table name.
     pub files: BTreeMap<String, SourceFile>,
+    /// Normalized topic-score input. Required by `build`; `resolve` leaves it
+    /// unset until an operator pins a separately produced normalized export.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub topics: Option<TopicSourceLock>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -39,6 +43,18 @@ pub struct SourceFile {
     pub sha1: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub md5: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopicSourceLock {
+    #[serde(flatten)]
+    pub source: SourceFile,
+    pub format: String,
+    pub model: String,
+    pub model_version: String,
+    pub threshold_millionths: u32,
+    pub catalog_sha256: String,
 }
 
 impl SourceLock {
@@ -74,6 +90,26 @@ impl SourceLock {
             ensure!(
                 !file.file.contains('/') && !file.file.contains(".."),
                 "`{table}` file name must be a bare file name"
+            );
+        }
+        if let Some(topics) = &self.topics {
+            ensure!(
+                topics.source.sha1.len() == 40
+                    && topics.source.sha1.bytes().all(|b| b.is_ascii_hexdigit()),
+                "topic source has a malformed SHA-1"
+            );
+            ensure!(
+                !topics.source.file.contains('/') && !topics.source.file.contains(".."),
+                "topic source file name must be a bare file name"
+            );
+            ensure!(
+                topics.threshold_millionths <= 1_000_000,
+                "topic threshold exceeds one million"
+            );
+            ensure!(
+                topics.catalog_sha256.len() == 64
+                    && topics.catalog_sha256.bytes().all(|b| b.is_ascii_hexdigit()),
+                "topic source has a malformed catalog SHA-256"
             );
         }
         Ok(())
@@ -167,6 +203,46 @@ pub struct TitleBuckets {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
+pub struct TopicCatalogEntry {
+    pub id: String,
+    pub label: String,
+    pub bit: u32,
+    pub count: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopicThreshold {
+    pub unit: String,
+    pub value: u32,
+    pub operator: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TopicSourceMetadata {
+    pub format: String,
+    pub model: String,
+    pub model_version: String,
+    pub catalog_sha256: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Topics {
+    pub dir: String,
+    pub shard_size: u32,
+    pub shard_count: u32,
+    pub index: FileRef,
+    pub catalog: Vec<TopicCatalogEntry>,
+    pub threshold: TopicThreshold,
+    pub source: TopicSourceMetadata,
+    /// Articles with at least one selected topic.
+    pub classified_articles: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct Manifest {
     pub schema_version: u32,
     pub snapshot_id: String,
@@ -178,6 +254,7 @@ pub struct Manifest {
     pub start_article: StartArticle,
     pub adjacency: RangeShards,
     pub metadata: RangeShards,
+    pub topics: Topics,
     pub titles: TitleBuckets,
     /// Keyed by report name; paths are relative to the snapshot directory.
     pub reports: BTreeMap<String, FileRef>,
@@ -256,6 +333,7 @@ mod tests {
                 .iter()
                 .map(|t| (t.to_string(), file(&format!("{t}.sql.gz"))))
                 .collect(),
+            topics: None,
         };
         lock.validate().unwrap();
 

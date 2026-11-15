@@ -15,5 +15,6 @@ pub mod resolve;
 pub mod snapshot;
 pub mod sql;
 pub mod titles;
+pub mod topics;
 pub mod util;
 pub mod verify;

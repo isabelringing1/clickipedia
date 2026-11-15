@@ -123,6 +123,16 @@ describe("verifyPublicSnapshot", () => {
     await expect(verify(baseUrl, { all: true })).rejects.toThrow(/titles\/000003\.bin does not match/);
   });
 
+  it("rejects a corrupted topic mask shard", async () => {
+    const dir = fixtureCopy();
+    const shard = join(dir, "snapshots", SNAPSHOT, "topics", "000003.bin");
+    const bytes = readFileSync(shard);
+    bytes[bytes.length - 1] ^= 1;
+    writeFileSync(shard, bytes);
+    const baseUrl = await listen({ dir });
+    await expect(verify(baseUrl, { all: true })).rejects.toThrow(/topics\/000003\.bin does not match/);
+  });
+
   it("rejects a snapshot with a missing object", async () => {
     const dir = fixtureCopy();
     rmSync(join(dir, "snapshots", SNAPSHOT, "adjacency", "000002.bin"));

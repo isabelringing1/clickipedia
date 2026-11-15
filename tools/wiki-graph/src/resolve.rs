@@ -137,7 +137,9 @@ pub fn lock_from_status(
             SourceFile {
                 file: name.clone(),
                 url: format!("{base_url}{path}"),
-                bytes: file.size.with_context(|| format!("{name}: status has no size"))?,
+                bytes: file
+                    .size
+                    .with_context(|| format!("{name}: status has no size"))?,
                 sha1: sha1.to_ascii_lowercase(),
                 md5: file.md5.as_ref().map(|md5| md5.to_ascii_lowercase()),
             },
@@ -148,6 +150,7 @@ pub fn lock_from_status(
         wiki: wiki.to_string(),
         dump_date: date.to_string(),
         files,
+        topics: None,
     };
     lock.validate()?;
     Ok(lock)
@@ -165,8 +168,16 @@ fn fetch_text(agent: &ureq::Agent, url: &str) -> Result<Option<String>> {
     }
 }
 
-fn fetch_status(agent: &ureq::Agent, base_url: &str, wiki: &str, date: &str) -> Result<Option<DumpStatus>> {
-    let url = format!("{}/{wiki}/{date}/dumpstatus.json", base_url.trim_end_matches('/'));
+fn fetch_status(
+    agent: &ureq::Agent,
+    base_url: &str,
+    wiki: &str,
+    date: &str,
+) -> Result<Option<DumpStatus>> {
+    let url = format!(
+        "{}/{wiki}/{date}/dumpstatus.json",
+        base_url.trim_end_matches('/')
+    );
     let Some(text) = fetch_text(agent, &url)? else {
         return Ok(None);
     };
@@ -201,7 +212,10 @@ pub fn resolve(base_url: &str, wiki: &str, selection: &Selection) -> Result<Sour
             let html = fetch_text(&agent, &index_url)?
                 .with_context(|| format!("{index_url} does not exist"))?;
             let dates = parse_dump_dates(&html);
-            ensure!(!dates.is_empty(), "no dated dump runs listed at {index_url}");
+            ensure!(
+                !dates.is_empty(),
+                "no dated dump runs listed at {index_url}"
+            );
             for date in dates.iter().rev() {
                 match fetch_status(&agent, base_url, wiki, date)? {
                     None => eprintln!("  {date}: no status document, skipping"),
@@ -254,7 +268,10 @@ mod tests {
 
     #[test]
     fn parses_dated_directories_only() {
-        assert_eq!(parse_dump_dates(INDEX), ["20260901", "20261001", "20261101"]);
+        assert_eq!(
+            parse_dump_dates(INDEX),
+            ["20260901", "20261001", "20261101"]
+        );
         assert!(parse_dump_dates("<html></html>").is_empty());
     }
 
@@ -291,19 +308,24 @@ mod tests {
         );
         assert_eq!(page.bytes, 123);
         assert_eq!(page.sha1, "08c19861e908c6f324ad091687ea19bff8d62bb4");
-        assert_eq!(page.md5.as_deref(), Some("c0b4cfd8479b0b8be33c41155ceed64d"));
+        assert_eq!(
+            page.md5.as_deref(),
+            Some("c0b4cfd8479b0b8be33c41155ceed64d")
+        );
         assert_eq!(lock.files.len(), 4);
     }
 
     #[test]
     fn rejects_unfinished_or_malformed_table_jobs() {
-        let unfinished = status(&[
-            table_job("pagetable", "page", "done"),
-            table_job("redirecttable", "redirect", "done"),
-            table_job("linktargettable", "linktarget", "done"),
-            table_job("pagelinkstable", "pagelinks", "in-progress"),
-        ]
-        .join(","));
+        let unfinished = status(
+            &[
+                table_job("pagetable", "page", "done"),
+                table_job("redirecttable", "redirect", "done"),
+                table_job("linktargettable", "linktarget", "done"),
+                table_job("pagelinkstable", "pagelinks", "in-progress"),
+            ]
+            .join(","),
+        );
         assert!(lock_from_status(&unfinished, DEFAULT_BASE_URL, "enwiki", "20261001").is_err());
 
         let missing = status(&table_job("pagetable", "page", "done"));

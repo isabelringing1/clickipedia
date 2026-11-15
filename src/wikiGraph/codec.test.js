@@ -5,9 +5,11 @@ import {
   FormatError,
   KIND_ADJACENCY,
   KIND_METADATA,
+  KIND_TOPICS,
   KIND_TITLES,
   decodeAdjacencyShard,
   decodeMetadataShard,
+  decodeTopicMaskShard,
   decodeOrdinalList,
   decodeShardIndex,
   decodeTitleBucket,
@@ -140,6 +142,34 @@ describe("metadata shards", () => {
   });
 });
 
+describe("topic mask shards", () => {
+  it("preserves multi-topic masks including bit 63", () => {
+    const bytes = concat(
+      ascii("CKTM"),
+      u32(1, 12, 3),
+      new Uint8Array(new BigUint64Array([0n, 3n, 1n << 63n]).buffer),
+    );
+    const shard = decodeTopicMaskShard(bytes);
+    expect(shard.firstOrdinal).toBe(12);
+    expect(shard.mask(0)).toBe(0n);
+    expect(shard.mask(1)).toBe(3n);
+    expect(shard.mask(2)).toBe(1n << 63n);
+  });
+
+  it("reads every topic mask from the fixture", () => {
+    const { shardCount, dir } = manifest.topics;
+    const masks = [];
+    for (let index = 0; index < shardCount; index += 1) {
+      const shard = decodeTopicMaskShard(file(shardPath(dir, index)));
+      for (let local = 0; local < shard.count; local += 1) {
+        masks.push(shard.mask(local));
+      }
+    }
+    expect(masks).toHaveLength(expected.counts.articles);
+    expect(masks.some((mask) => (mask & (mask - 1n)) !== 0n)).toBe(true);
+  });
+});
+
 describe("title buckets", () => {
   const bucketCount = manifest.titles.bucketCount;
   const buckets = Array.from({ length: bucketCount }, (_, index) =>
@@ -222,6 +252,7 @@ describe("shard indexes", () => {
     const kinds = [
       ["adjacency", KIND_ADJACENCY, manifest.adjacency.shardCount],
       ["metadata", KIND_METADATA, manifest.metadata.shardCount],
+      ["topics", KIND_TOPICS, manifest.topics.shardCount],
       ["titles", KIND_TITLES, manifest.titles.bucketCount],
     ];
     for (const [name, kind, count] of kinds) {

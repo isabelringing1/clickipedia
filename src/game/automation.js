@@ -221,3 +221,95 @@ export class AutomationRunner {
     return { opened, done };
   }
 }
+
+// Runs every unlocked room from one timer. Rooms retain their own credit,
+// retry state and crawl position, while round-robin turns prevent a busy
+// room from starving the others or creating one timer per room.
+export class RoomAutomationRunner {
+  constructor({
+    getRooms,
+    onOpened,
+    onStatus = () => {},
+    now = () => performance.now(),
+    timers = globalThis,
+    pause = yieldToBrowser,
+  }) {
+    this.getRooms = getRooms;
+    this.onOpened = onOpened;
+    this.onStatus = onStatus;
+    this.now = now;
+    this.timers = timers;
+    this.pause = pause;
+    this.runners = new Map();
+    this.timer = null;
+    this.running = false;
+    this.busy = false;
+    this.cursor = 0;
+  }
+
+  runnerFor(entry) {
+    let runner = this.runners.get(entry.id);
+    if (!runner) {
+      runner = new AutomationRunner({
+        crawler: entry.crawler,
+        automation: entry.room.automation,
+        getAutos: () => entry.room.autos,
+        onOpened: (ordinals) => this.onOpened(entry.id, ordinals),
+        onStatus: (status) => this.onStatus(entry.id, status),
+        now: this.now,
+        timers: this.timers,
+        pause: this.pause,
+      });
+      runner.running = true;
+      runner.lastTurnAt = this.now();
+      this.runners.set(entry.id, runner);
+    }
+    return runner;
+  }
+
+  start() {
+    if (this.running) return;
+    this.running = true;
+    this.schedule();
+  }
+
+  stop() {
+    this.running = false;
+    if (this.timer !== null) {
+      this.timers.clearTimeout(this.timer);
+      this.timer = null;
+    }
+    for (const runner of this.runners.values()) {
+      runner.stop();
+    }
+  }
+
+  schedule() {
+    if (!this.running) return;
+    this.timer = this.timers.setTimeout(async () => {
+      this.timer = null;
+      try {
+        await this.turn();
+      } catch (error) {
+        console.error("Room automation turn failed:", error);
+      }
+      this.schedule();
+    }, TURN_INTERVAL_MS);
+  }
+
+  async turn() {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const rooms = this.getRooms().filter((entry) => entry.room.autos > 0);
+      if (rooms.length === 0) return;
+      this.cursor %= rooms.length;
+      // One room turn per scheduler tick keeps work bounded and fair.
+      const entry = rooms[this.cursor];
+      this.cursor = (this.cursor + 1) % rooms.length;
+      await this.runnerFor(entry).turn();
+    } finally {
+      this.busy = false;
+    }
+  }
+}

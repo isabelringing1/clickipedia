@@ -8,10 +8,12 @@
 import {
   KIND_ADJACENCY,
   KIND_METADATA,
+  KIND_TOPICS,
   KIND_TITLES,
   FormatError,
   decodeAdjacencyShard,
   decodeMetadataShard,
+  decodeTopicMaskShard,
   decodeOrdinalList,
   decodeShardIndex,
   decodeTitleBucket,
@@ -37,6 +39,7 @@ const DEFAULT_OPTIONS = {
   cache: {
     adjacency: { maxEntries: 48, maxWeight: 64 * MIB },
     metadata: { maxEntries: 48, maxWeight: 16 * MIB },
+    topics: { maxEntries: 128, maxWeight: 8 * MIB },
     titles: { maxEntries: 96, maxWeight: 24 * MIB },
   },
 };
@@ -265,6 +268,36 @@ export function validateManifest(manifest) {
       reject("corrupt", `has an inconsistent ${kind} shard count`);
     }
   }
+  if (manifest.topics !== undefined) {
+    const topics = manifest.topics;
+    if (
+      !topics ||
+      typeof topics.dir !== "string" ||
+      !isCount(topics.shardSize) ||
+      topics.shardSize === 0 ||
+      !isCount(topics.shardCount) ||
+      !isFileRef(topics.index)
+    ) {
+      reject("corrupt", "has an invalid topics section");
+    }
+    if (topics.shardCount !== Math.ceil(counts.articles / topics.shardSize)) {
+      reject("corrupt", "has an inconsistent topics shard count");
+    }
+    if (
+      !Array.isArray(topics.catalog) ||
+      topics.catalog.length !== 64 ||
+      topics.catalog.some(
+        (topic, bit) =>
+          !topic ||
+          topic.bit !== bit ||
+          typeof topic.id !== "string" ||
+          typeof topic.label !== "string" ||
+          !isCount(topic.count),
+      )
+    ) {
+      reject("corrupt", "has an invalid topic catalog");
+    }
+  }
   const titles = manifest.titles;
   if (
     !titles ||
@@ -339,6 +372,7 @@ export async function openSnapshot(baseUrl, { snapshotId, manifestSha256 }, opti
 const KINDS = {
   adjacency: { kind: KIND_ADJACENCY, decode: decodeAdjacencyShard },
   metadata: { kind: KIND_METADATA, decode: decodeMetadataShard },
+  topics: { kind: KIND_TOPICS, decode: decodeTopicMaskShard },
   titles: { kind: KIND_TITLES, decode: decodeTitleBucket },
 };
 
@@ -354,6 +388,7 @@ export class GraphClient {
     this.caches = {
       adjacency: new LruCache(this.options.cache.adjacency),
       metadata: new LruCache(this.options.cache.metadata),
+      topics: new LruCache(this.options.cache.topics),
       titles: new LruCache(this.options.cache.titles),
     };
     this.indexes = new Map();
@@ -367,6 +402,10 @@ export class GraphClient {
 
   get articleCount() {
     return this.manifest.counts.articles;
+  }
+
+  get hasTopics() {
+    return this.manifest.topics !== undefined;
   }
 
   get startArticle() {
@@ -394,6 +433,10 @@ export class GraphClient {
 
   metadataShardOf(ordinal) {
     return Math.floor(ordinal / this.manifest.metadata.shardSize);
+  }
+
+  topicShardOf(ordinal) {
+    return Math.floor(ordinal / this.manifest.topics.shardSize);
   }
 
   // True when getArticle for this shard's articles needs no download.
@@ -529,6 +572,27 @@ export class GraphClient {
     const size = this.manifest.metadata.shardSize;
     const shard = await this.loadShard("metadata", Math.floor(ordinal / size));
     return shard.article(ordinal % size);
+  }
+
+  async getTopicMask(ordinal) {
+    this.checkOrdinal(ordinal);
+    if (!this.hasTopics) {
+      return 0n;
+    }
+    const size = this.manifest.topics.shardSize;
+    const shard = await this.loadShard("topics", Math.floor(ordinal / size));
+    return shard.mask(ordinal % size);
+  }
+
+  async hasTopic(ordinal, topicIndex) {
+    if (!Number.isInteger(topicIndex) || topicIndex < 0 || topicIndex >= 64) {
+      throw new RangeError(`topic index ${topicIndex} is out of range`);
+    }
+    if (!this.hasTopics) {
+      return false;
+    }
+    const mask = await this.getTopicMask(ordinal);
+    return (mask & (1n << BigInt(topicIndex))) !== 0n;
   }
 
   // Loads one of the files listed under `reports` in the manifest: parsed

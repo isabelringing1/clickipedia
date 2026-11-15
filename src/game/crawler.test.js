@@ -50,6 +50,21 @@ function visitedSet(session) {
 }
 
 describe("Crawler", () => {
+  it("only auto-opens targets in the room topic", async () => {
+    const session = await start();
+    await session.openLink("general", "Cookie Clicker", 0);
+    const crawler = session.crawlers.get("video-games");
+    const opened = [];
+    for (;;) {
+      const result = await crawler.run(10);
+      opened.push(...result.opened);
+      if (result.exhausted) break;
+    }
+    expect(opened).toEqual([0]);
+    expect(session.rooms["video-games"].visited.has(3)).toBe(false);
+    expect(session.rooms["video-games"].visited.has(7)).toBe(false);
+  });
+
   it("opens exactly the articles reachable from the start", async () => {
     const session = await start();
     const opened = [];
@@ -166,6 +181,7 @@ describe("Crawler", () => {
     session.state.automation.scanCursor = 9;
     session.crawler.currentShard = -1;
     session.state.visited.add(5);
+    session.crawler.prioritize(5);
     const { opened, exhausted } = await session.crawler.run(100);
     // Orphan (5) links only to Cookie Clicker, which is already open.
     expect(opened).toEqual([]);

@@ -94,7 +94,10 @@ fn fixture_builds_the_expected_graph() {
     let reader = SnapshotReader::open(&built.snapshot).unwrap();
     let manifest = reader.manifest();
 
-    assert_eq!(manifest.snapshot_id, expected["snapshotId"].as_str().unwrap());
+    assert_eq!(
+        manifest.snapshot_id,
+        expected["snapshotId"].as_str().unwrap()
+    );
     assert_eq!(manifest.wiki, expected["wiki"].as_str().unwrap());
     assert_eq!(manifest.dump_date, expected["dumpDate"].as_str().unwrap());
     assert_eq!(
@@ -119,7 +122,13 @@ fn fixture_builds_the_expected_graph() {
         manifest.titles.bucket_count as u64,
         expected["format"]["titleBuckets"].as_u64().unwrap()
     );
-    assert_eq!(manifest.sources.len(), 4);
+    assert_eq!(manifest.sources.len(), 5);
+    assert_eq!(manifest.topics.catalog.len(), 64);
+    assert_eq!(manifest.topics.classified_articles, 9);
+    assert_eq!(manifest.topics.threshold.value, 600_000);
+    assert_eq!(manifest.topics.catalog[0].count, 1); // Biography*
+    assert_eq!(manifest.topics.catalog[14].count, 2); // Video games
+    assert_eq!(manifest.topics.catalog[63].count, 2); // Technology
 
     let articles = expected["articles"].as_array().unwrap();
     assert_eq!(articles.len() as u32, manifest.counts.articles);
@@ -138,12 +147,20 @@ fn fixture_builds_the_expected_graph() {
         assert_eq!(found.ordinal, ordinal, "lookup of {title}");
         assert!(!found.is_redirect);
     }
+    assert_eq!(reader.topic_mask(0).unwrap(), (1u64 << 14) | (1u64 << 55));
+    assert_eq!(reader.topic_mask(5).unwrap(), 3);
+    assert_eq!(reader.topic_mask(7).unwrap(), 0);
+    assert_eq!(reader.topic_mask(9).unwrap(), (1u64 << 47) | (1u64 << 63));
     assert!(reader.article(manifest.counts.articles).is_err());
     assert!(reader.neighbors(manifest.counts.articles).is_err());
 
     for (alias, ordinal) in expected["aliases"].as_object().unwrap() {
         let found = reader.lookup_title(alias).unwrap().unwrap();
-        assert_eq!(found.ordinal as u64, ordinal.as_u64().unwrap(), "alias {alias}");
+        assert_eq!(
+            found.ordinal as u64,
+            ordinal.as_u64().unwrap(),
+            "alias {alias}"
+        );
         assert!(found.is_redirect, "alias {alias}");
     }
     for title in expected["notFound"].as_array().unwrap() {
@@ -153,24 +170,53 @@ fn fixture_builds_the_expected_graph() {
     for lookup in expected["lookups"].as_array().unwrap() {
         let input = lookup["input"].as_str().unwrap();
         let found = reader.lookup_title(input).unwrap().unwrap();
-        assert_eq!(found.ordinal as u64, lookup["ordinal"].as_u64().unwrap(), "{input}");
-        assert_eq!(found.is_redirect, lookup["isRedirect"].as_bool().unwrap(), "{input}");
+        assert_eq!(
+            found.ordinal as u64,
+            lookup["ordinal"].as_u64().unwrap(),
+            "{input}"
+        );
+        assert_eq!(
+            found.is_redirect,
+            lookup["isRedirect"].as_bool().unwrap(),
+            "{input}"
+        );
     }
 
     let redirects = &expected["redirectStats"];
     let stats = &built.summary.redirects;
-    assert_eq!(stats.redirect_pages as u64, redirects["redirectPages"].as_u64().unwrap());
+    assert_eq!(
+        stats.redirect_pages as u64,
+        redirects["redirectPages"].as_u64().unwrap()
+    );
     assert_eq!(stats.aliases as u64, redirects["aliases"].as_u64().unwrap());
-    assert_eq!(stats.missing_row as u64, redirects["missingRow"].as_u64().unwrap());
-    assert_eq!(stats.no_usable_target as u64, redirects["noUsableTarget"].as_u64().unwrap());
-    assert_eq!(stats.unresolved_chain as u64, redirects["unresolvedChain"].as_u64().unwrap());
+    assert_eq!(
+        stats.missing_row as u64,
+        redirects["missingRow"].as_u64().unwrap()
+    );
+    assert_eq!(
+        stats.no_usable_target as u64,
+        redirects["noUsableTarget"].as_u64().unwrap()
+    );
+    assert_eq!(
+        stats.unresolved_chain as u64,
+        redirects["unresolvedChain"].as_u64().unwrap()
+    );
 
     let links = &expected["linkStats"];
     let stats = &built.summary.links;
     assert_eq!(stats.rows, links["rows"].as_u64().unwrap());
-    assert_eq!(stats.source_other_namespace, links["sourceOtherNamespace"].as_u64().unwrap());
-    assert_eq!(stats.target_unresolved, links["targetUnresolved"].as_u64().unwrap());
-    assert_eq!(stats.source_not_article, links["sourceNotArticle"].as_u64().unwrap());
+    assert_eq!(
+        stats.source_other_namespace,
+        links["sourceOtherNamespace"].as_u64().unwrap()
+    );
+    assert_eq!(
+        stats.target_unresolved,
+        links["targetUnresolved"].as_u64().unwrap()
+    );
+    assert_eq!(
+        stats.source_not_article,
+        links["sourceNotArticle"].as_u64().unwrap()
+    );
     assert_eq!(stats.self_links, links["selfLinks"].as_u64().unwrap());
     assert_eq!(stats.emitted, links["emitted"].as_u64().unwrap());
     assert_eq!(stats.unique, links["unique"].as_u64().unwrap());
@@ -190,16 +236,28 @@ fn fixture_connectivity_report_matches_expectations() {
     assert_eq!(report.articles, 10);
     assert_eq!(report.edges, 12);
     assert_eq!(report.start.title, "Incremental_game");
-    assert_eq!(report.start.reachable as u64, connectivity["reachableFromStart"].as_u64().unwrap());
+    assert_eq!(
+        report.start.reachable as u64,
+        connectivity["reachableFromStart"].as_u64().unwrap()
+    );
     assert_eq!(report.start.unreachable, 4);
     assert_eq!(
         report.start.in_largest_component,
         connectivity["startInLargestComponent"].as_bool().unwrap()
     );
     let components = &report.strongly_connected_components;
-    assert_eq!(components.count as u64, connectivity["componentCount"].as_u64().unwrap());
-    assert_eq!(components.largest as u64, connectivity["largestComponent"].as_u64().unwrap());
-    assert_eq!(components.top_sizes, u32s(&connectivity["topComponentSizes"]));
+    assert_eq!(
+        components.count as u64,
+        connectivity["componentCount"].as_u64().unwrap()
+    );
+    assert_eq!(
+        components.largest as u64,
+        connectivity["largestComponent"].as_u64().unwrap()
+    );
+    assert_eq!(
+        components.top_sizes,
+        u32s(&connectivity["topComponentSizes"])
+    );
     assert_eq!(
         report.degrees.max_out.ordinal as u64,
         connectivity["maxOutDegree"]["ordinal"].as_u64().unwrap()
@@ -220,12 +278,20 @@ fn fixture_connectivity_report_matches_expectations() {
     for (list, name, key) in [
         (&report.zero_indegree, "zeroIndegree", "zeroIndegree"),
         (&report.isolated, "isolated", "isolated"),
-        (&report.unreachable_from_start, "unreachableFromStart", "unreachableFromStart"),
+        (
+            &report.unreachable_from_start,
+            "unreachableFromStart",
+            "unreachableFromStart",
+        ),
     ] {
         let ordinals = u32s(&connectivity[key]);
         assert_eq!(list.count as usize, ordinals.len(), "{name}");
         assert_eq!(list.list, manifest.reports[name].path);
-        assert_eq!(read_ordinals(&built.snapshot, &list.list), ordinals, "{name}");
+        assert_eq!(
+            read_ordinals(&built.snapshot, &list.list),
+            ordinals,
+            "{name}"
+        );
         let sampled: Vec<u32> = list.sample.iter().map(|a| a.ordinal).collect();
         assert_eq!(sampled, ordinals, "{name} sample");
     }
@@ -267,7 +333,10 @@ fn every_emitted_edge_is_an_input_hyperlink_after_redirect_resolution() {
     }
     let mut redirect_rows: HashMap<i64, (i64, String, String)> = HashMap::new();
     for row in rows("redirect") {
-        let interwiki = row[3].clone().map(|b| String::from_utf8(b).unwrap()).unwrap_or_default();
+        let interwiki = row[3]
+            .clone()
+            .map(|b| String::from_utf8(b).unwrap())
+            .unwrap_or_default();
         redirect_rows.insert(number(&row[0]), (number(&row[1]), text(&row[2]), interwiki));
     }
     let resolve = |title: &str| -> Option<String> {
@@ -356,7 +425,10 @@ fn build_is_deterministic_and_independent_of_sort_memory() {
     for capacity in [1, 2, 7, 1_000_000] {
         let built = build_with(|options| options.sort_capacity_edges = capacity);
         let differences = diff_trees(&reference, &read_tree(&built.snapshot).unwrap());
-        assert!(differences.is_empty(), "capacity {capacity}: {differences:?}");
+        assert!(
+            differences.is_empty(),
+            "capacity {capacity}: {differences:?}"
+        );
     }
 }
 
@@ -371,14 +443,23 @@ fn shard_sizes_change_layout_but_not_the_graph() {
         });
         verify(&verify_options(&built.snapshot)).unwrap();
         let reader = SnapshotReader::open(&built.snapshot).unwrap();
-        assert_eq!(reader.manifest().adjacency.shard_count, 10u32.div_ceil(adjacency));
-        assert_eq!(reader.manifest().metadata.shard_count, 10u32.div_ceil(metadata));
+        assert_eq!(
+            reader.manifest().adjacency.shard_count,
+            10u32.div_ceil(adjacency)
+        );
+        assert_eq!(
+            reader.manifest().metadata.shard_count,
+            10u32.div_ceil(metadata)
+        );
         for article in expected["articles"].as_array().unwrap() {
             let ordinal = article["ordinal"].as_u64().unwrap() as u32;
             let title = article["title"].as_str().unwrap();
             assert_eq!(reader.article(ordinal).unwrap().title, title);
             assert_eq!(reader.neighbors(ordinal).unwrap(), u32s(&article["links"]));
-            assert_eq!(reader.lookup_title(title).unwrap().unwrap().ordinal, ordinal);
+            assert_eq!(
+                reader.lookup_title(title).unwrap().unwrap().ordinal,
+                ordinal
+            );
         }
     }
 }
@@ -390,10 +471,9 @@ fn gzipped_dumps_produce_identical_shards() {
     fs::create_dir_all(&dumps).unwrap();
     let mut files = BTreeMap::new();
     for table in TABLES {
-        let plain = fs::read(
-            fixture_dumps_dir().join(format!("tinywiki-{FIXTURE_DATE}-{table}.sql")),
-        )
-        .unwrap();
+        let plain =
+            fs::read(fixture_dumps_dir().join(format!("tinywiki-{FIXTURE_DATE}-{table}.sql")))
+                .unwrap();
         let name = format!("tinywiki-{FIXTURE_DATE}-{table}.sql.gz");
         // Two concatenated gzip members, as produced by parallel compressors.
         let split = plain.len() / 2;
@@ -417,11 +497,26 @@ fn gzipped_dumps_produce_identical_shards() {
             },
         );
     }
+    let topic_name = fixture_lock(&fixture_dumps_dir())
+        .unwrap()
+        .topics
+        .as_ref()
+        .unwrap()
+        .source
+        .file
+        .clone();
+    fs::copy(
+        fixture_dumps_dir().join(&topic_name),
+        dumps.join(&topic_name),
+    )
+    .unwrap();
+    let topics = fixture_lock(&fixture_dumps_dir()).unwrap().topics;
     let lock = SourceLock {
         schema_version: manifest::SCHEMA_VERSION,
         wiki: "tinywiki".into(),
         dump_date: FIXTURE_DATE.into(),
         files,
+        topics,
     };
     let public = scratch.path().join("public");
     let options = fixture_options(lock, &dumps, &scratch.path().join("work"), &public);
@@ -446,8 +541,8 @@ fn verify_accepts_the_fixture_and_expected_links() {
     ];
     let outcome = verify(&options).unwrap();
     assert_eq!(outcome.manifest_sha256, built.summary.manifest_sha256);
-    // manifest + 3 indexes + 3 adjacency + 4 metadata + 4 title + 4 reports
-    assert_eq!(outcome.files, 19);
+    // manifest + 4 indexes + 3 adjacency + 4 metadata + 4 topic + 4 title + 4 reports
+    assert_eq!(outcome.files, 24);
     assert_eq!(outcome.files, built.summary.file_count);
     assert_eq!(outcome.bytes, built.summary.total_bytes);
 
@@ -484,7 +579,10 @@ fn verify_rejects_corrupted_snapshots() {
         for quick in [false, true] {
             let mut options = verify_options(&built.snapshot);
             options.quick = quick;
-            assert!(verify(&options).is_err(), "{label} (quick: {quick}) was accepted");
+            assert!(
+                verify(&options).is_err(),
+                "{label} (quick: {quick}) was accepted"
+            );
         }
     }
     fn flip_last_byte(path: &Path) {
@@ -498,6 +596,9 @@ fn verify_rejects_corrupted_snapshots() {
     });
     corrupt("bit flip in a metadata shard", |dir| {
         flip_last_byte(&dir.join("metadata/000001.bin"))
+    });
+    corrupt("bit flip in a topic shard", |dir| {
+        flip_last_byte(&dir.join("topics/000001.bin"))
     });
     corrupt("bit flip in a title bucket", |dir| {
         flip_last_byte(&dir.join("titles/000002.bin"))
@@ -566,7 +667,10 @@ fn verify_rejects_internally_consistent_but_invalid_graphs() {
             Err(error) => error,
         };
         // The failure must come from a structural check, not a hash mismatch.
-        assert!(!format!("{error:#}").contains("SHA-256"), "{label}: {error:#}");
+        assert!(
+            !format!("{error:#}").contains("SHA-256"),
+            "{label}: {error:#}"
+        );
     }
 
     // Ordinal 0 links to [1, 2, 4].
@@ -664,7 +768,10 @@ fn build_rejects_bad_inputs() {
 #[test]
 fn start_title_given_as_a_redirect_resolves_to_the_article() {
     let built = build_with(|options| options.start_title = "idle game".into());
-    assert_eq!(built.summary.manifest.start_article.title, "Incremental_game");
+    assert_eq!(
+        built.summary.manifest.start_article.title,
+        "Incremental_game"
+    );
     assert_eq!(built.summary.manifest.start_article.ordinal, 0);
     verify(&verify_options(&built.snapshot)).unwrap();
 }
@@ -677,7 +784,10 @@ fn latest_points_at_the_snapshot_manifest() {
     let latest: Latest =
         serde_json::from_slice(&fs::read(public.join("latest.json")).unwrap()).unwrap();
     assert_eq!(latest.snapshot_id, FIXTURE_DATE);
-    assert_eq!(latest.manifest_path, format!("{SNAPSHOTS_DIR}/{FIXTURE_DATE}/manifest.json"));
+    assert_eq!(
+        latest.manifest_path,
+        format!("{SNAPSHOTS_DIR}/{FIXTURE_DATE}/manifest.json")
+    );
     assert_eq!(latest.manifest_sha256, summary.manifest_sha256);
     assert_eq!(
         sha256_hex(&fs::read(public.join(&latest.manifest_path)).unwrap()),
@@ -697,11 +807,15 @@ fn compare_accepts_plausible_refreshes_and_rejects_implausible_ones() {
     .unwrap();
     let thresholds = Thresholds::default();
     let regressions = |manifest: &Manifest, report: &ConnectivityReport| -> Vec<&'static str> {
-        compare_snapshots((&old_manifest, &old_report), (manifest, report), &thresholds)
-            .into_iter()
-            .filter(|finding| finding.regression.is_some())
-            .map(|finding| finding.metric)
-            .collect()
+        compare_snapshots(
+            (&old_manifest, &old_report),
+            (manifest, report),
+            &thresholds,
+        )
+        .into_iter()
+        .filter(|finding| finding.regression.is_some())
+        .map(|finding| finding.metric)
+        .collect()
     };
 
     let mut newer = old_manifest.clone();
@@ -721,16 +835,26 @@ fn compare_accepts_plausible_refreshes_and_rejects_implausible_ones() {
     // Twice the articles also halves the reachable and largest-component shares.
     assert_eq!(
         regressions(&more_articles, &old_report),
-        ["articles", "share reachable from start", "share in largest component"]
+        [
+            "articles",
+            "share reachable from start",
+            "share in largest component"
+        ]
     );
 
     let mut less_reachable = old_report.clone();
     less_reachable.start.reachable = 2;
-    assert_eq!(regressions(&newer, &less_reachable), ["share reachable from start"]);
+    assert_eq!(
+        regressions(&newer, &less_reachable),
+        ["share reachable from start"]
+    );
 
     let mut more_orphans = old_report.clone();
     more_orphans.zero_indegree.count = 9;
-    assert_eq!(regressions(&newer, &more_orphans), ["zero-indegree articles"]);
+    assert_eq!(
+        regressions(&newer, &more_orphans),
+        ["zero-indegree articles"]
+    );
 
     let mut renamed = newer.clone();
     renamed.start_article.title = "Cookie_Clicker".into();

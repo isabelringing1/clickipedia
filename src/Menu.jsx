@@ -1,5 +1,6 @@
+import { useState } from "react";
 import Log from "./Log";
-import Progress from "./Progress";
+import { AutomationStatus } from "./Progress";
 import Quests from "./Quests";
 import Shop from "./Shop";
 import ScrollRegion from "./ScrollRegion";
@@ -7,32 +8,44 @@ import ScrollRegion from "./ScrollRegion";
 function Menu(props) {
   const {
     history,
+    historyDroppedCount,
     rootEntry,
-    visitedCount,
-    articleCount,
-    automationStatus,
-    knowledge,
-    setKnowledge,
-    autos,
-    setAutos,
     quests,
+    anyBlocked,
     resurfaceArticle,
-    setInfo,
-    purchasedItems,
-    setPurchasedItems,
+    leaveRoom,
   } = props;
-  const hasOpenedArticle = visitedCount > 1;
+  const [showAutos, setShowAutos] = useState(false);
   const hasOpenQuest = Object.values(quests).some((quest) => !quest.complete);
 
   return (
     <div id="menu">
-      <Progress
-        visitedCount={visitedCount}
-        articleCount={articleCount}
-        automationStatus={automationStatus}
-        knowledge={knowledge}
-        autos={autos}
-      />
+      <button className="leave-room" type="button" onClick={leaveRoom}>
+        <span aria-hidden="true">&lt;</span> Leave Room
+        {anyBlocked && <span className="room-warning"> !</span>}
+      </button>
+      <section className="menu-panel history-panel">
+        <div className="history-heading">
+          <h2>History</h2>
+          <label className="history-autos-toggle">
+            <input
+              type="checkbox"
+              checked={showAutos}
+              onChange={(event) => setShowAutos(event.target.checked)}
+            />
+            Show Autos
+          </label>
+        </div>
+        <ScrollRegion className="history-scroll-region">
+          <Log
+            history={history}
+            historyDroppedCount={historyDroppedCount}
+            showAutos={showAutos}
+            rootEntry={rootEntry}
+            resurfaceArticle={resurfaceArticle}
+          />
+        </ScrollRegion>
+      </section>
 
       {hasOpenQuest && (
         <section className="menu-panel quests-panel">
@@ -40,7 +53,33 @@ function Menu(props) {
           <Quests quests={quests} />
         </section>
       )}
+    </div>
+  );
+}
 
+export function SharedMenu(props) {
+  const {
+    knowledge,
+    autos,
+    automationStatus,
+    setKnowledge,
+    setAutos,
+    setInfo,
+    purchasedItems,
+    setPurchasedItems,
+    hidden,
+  } = props;
+
+  return (
+    <aside className="shared-menu" hidden={hidden}>
+      {autos > 0 && (
+        <section className="menu-panel auto-panel">
+          <AutomationStatus
+            autos={autos}
+            automationStatus={automationStatus}
+          />
+        </section>
+      )}
       <Shop
         knowledge={knowledge}
         setKnowledge={setKnowledge}
@@ -49,20 +88,8 @@ function Menu(props) {
         purchasedItems={purchasedItems}
         setPurchasedItems={setPurchasedItems}
       />
-
-      {hasOpenedArticle && (
-        <section className="menu-panel history-panel">
-          <h2>History</h2>
-          <ScrollRegion className="history-scroll-region">
-            <Log
-              history={history}
-              rootEntry={rootEntry}
-              resurfaceArticle={resurfaceArticle}
-            />
-          </ScrollRegion>
-        </section>
-      )}
-    </div>
+    </aside>
   );
 }
+
 export default Menu;

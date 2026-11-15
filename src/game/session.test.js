@@ -2,10 +2,15 @@ import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { PlayerStore } from "../save/playerStore.js";
-import { HISTORY_LIMIT, SaveError } from "../save/saveFormat.js";
+import {
+  HISTORY_LIMIT,
+  MANUAL_HISTORY_LIMIT,
+  SaveError,
+} from "../save/saveFormat.js";
 import { BASE_URL, FakeBucket, expected, fastOptions } from "../testing/fixtureGraph.js";
 import { GraphError } from "../wikiGraph/client.js";
 import { startSession } from "./session.js";
+import topicCatalog from "../../topic-catalog.json";
 
 const ROOT = `snapshots/${expected.snapshotId}/`;
 
@@ -161,7 +166,7 @@ describe("reloading", () => {
     const first = await load();
     await first.openLink("Cookie Clicker", 0);
     const record = first.record();
-    record.visited = record.visited.slice(0, 1);
+    record.globalVisited = record.globalVisited.slice(0, 1);
     await first.store.write(record);
     first.store.close();
 
@@ -175,6 +180,63 @@ describe("reloading", () => {
 });
 
 describe("opening links", () => {
+  it("unlocks a matching topic room and keeps room progress independent", async () => {
+    const session = await load();
+    expect(Object.keys(session.rooms)).toEqual(["general"]);
+
+    const opened = await session.openLink("general", "Cookie Clicker", 0);
+    expect(opened).toMatchObject({
+      status: "opened",
+      ordinal: 1,
+      globalNew: true,
+      unlocked: ["video-games"],
+    });
+    expect(session.rooms["video-games"].root).toEqual({
+      ordinal: 1,
+      title: "Cookie_Clicker",
+    });
+
+    const repeated = await session.openLink("video-games", "Café", 1);
+    expect(repeated.globalNew).toBe(true);
+    expect(repeated.unlocked).toEqual(["geographical"]);
+    expect(session.rooms.general.visited.has(4)).toBe(false);
+
+    const inGeneral = await session.openLink("general", "Café", 0);
+    expect(inGeneral.status).toBe("opened");
+    expect(inGeneral.globalNew).toBe(false);
+  });
+
+  it("unlocks at most one topic per globally new article", async () => {
+    const session = await load();
+    const topicIndex = (id) =>
+      topicCatalog.topics.findIndex((topic) => topic.id === id);
+    const mask =
+      (1n << BigInt(topicIndex("video-games"))) |
+      (1n << BigInt(topicIndex("computing")));
+    session.graph.getTopicMask = async () => mask;
+
+    const first = await session.openLink("general", "Cookie Clicker", 0);
+    expect(first.unlocked).toEqual(["video-games"]);
+    expect(session.rooms.computing).toBeUndefined();
+
+    const repeated = await session.openLink(
+      "video-games",
+      "Cookie Clicker",
+      4,
+    );
+    expect(repeated.status).toBe("seen");
+    expect(repeated.unlocked).toEqual([]);
+    expect(session.rooms.computing).toBeUndefined();
+
+    const anotherArticle = await session.openLink(
+      "video-games",
+      "Twin A",
+      1,
+    );
+    expect(anotherArticle.unlocked).toEqual(["computing"]);
+    expect(session.rooms.computing.newlyUnlocked).toBe(true);
+  });
+
   it("opens an article once, by any spelling of its title", async () => {
     const session = await load();
     expect(await session.openLink("cookie Clicker", 0)).toEqual({
@@ -282,14 +344,46 @@ describe("history", () => {
       session.addHistory([{ kind: "article", ordinal: 4, title: "Café" }], reading.seq);
     }
     const { history } = session.game;
-    expect(history.length).toBe(HISTORY_LIMIT);
+    expect(history.length).toBe(MANUAL_HISTORY_LIMIT + 1);
     expect(history[0]).toEqual(reading);
-    expect(history[1].seq).toBe(HISTORY_LIMIT * 3 + 1 - (HISTORY_LIMIT - 2));
+    expect(history[1].seq).toBe(
+      HISTORY_LIMIT * 3 + 2 - MANUAL_HISTORY_LIMIT,
+    );
     expect(history[history.length - 1].seq).toBe(HISTORY_LIMIT * 3 + 1);
 
     session.addHistory([{ kind: "quest" }]);
-    expect(session.game.history.length).toBe(HISTORY_LIMIT);
+    expect(session.game.history.length).toBe(MANUAL_HISTORY_LIMIT);
     expect(session.game.history[0].seq).not.toBe(reading.seq);
+  });
+
+  it("keeps the latest 50 manual activities when Auto history is trimmed", async () => {
+    const session = await load();
+    for (let index = 0; index < 60; index += 1) {
+      session.addHistory([
+        index === 59
+          ? { kind: "quest" }
+          : { kind: "article", ordinal: 1, title: "Cookie_Clicker" },
+      ]);
+    }
+    for (let index = 0; index < 100; index += 1) {
+      session.addHistory([
+        {
+          kind: "article",
+          source: "auto",
+          ordinal: 4,
+          title: "Café",
+        },
+      ]);
+    }
+
+    const manual = session.game.history.filter(
+      (entry) => entry.source !== "auto",
+    );
+    expect(session.game.history).toHaveLength(HISTORY_LIMIT);
+    expect(manual).toHaveLength(MANUAL_HISTORY_LIMIT);
+    expect(manual[0].seq).toBe(11);
+    expect(manual.at(-1).kind).toBe("quest");
+    expect(session.room("general").historyDroppedCount).toBe(60);
   });
 });
 

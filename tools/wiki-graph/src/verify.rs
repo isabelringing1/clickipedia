@@ -15,11 +15,13 @@ use anyhow::{bail, ensure, Context, Result};
 
 use crate::connectivity::{self, ConnectivityReport, CsrBuilder};
 use crate::format::{
-    self, AdjacencyShard, MetadataShard, ShardIndex, TitleBucket, TITLE_FLAG_REDIRECT,
+    self, AdjacencyShard, MetadataShard, ShardIndex, TitleBucket, TopicMaskShard,
+    TITLE_FLAG_REDIRECT,
 };
 use crate::manifest::{self, FileRef, Manifest};
 use crate::snapshot::SnapshotReader;
 use crate::titles::{bucket_for, MAX_TITLE_BYTES, TITLE_HASH_NAME};
+use crate::topics;
 use crate::util::{hex, human_bytes, human_count, sha256, sha256_hex, Progress};
 
 pub struct VerifyOptions {
@@ -47,7 +49,12 @@ struct Checker<'a> {
 }
 
 impl Checker<'_> {
-    fn read_exact(&mut self, relative: &str, bytes: u64, sha256_hex_expected: &str) -> Result<Vec<u8>> {
+    fn read_exact(
+        &mut self,
+        relative: &str,
+        bytes: u64,
+        sha256_hex_expected: &str,
+    ) -> Result<Vec<u8>> {
         let data = self.reader.read(relative)?;
         ensure!(
             data.len() as u64 == bytes,
@@ -68,7 +75,13 @@ impl Checker<'_> {
         self.read_exact(&reference.path, reference.bytes, &reference.sha256)
     }
 
-    fn read_index(&mut self, dir: &str, reference: &FileRef, kind: u32, count: u32) -> Result<ShardIndex> {
+    fn read_index(
+        &mut self,
+        dir: &str,
+        reference: &FileRef,
+        kind: u32,
+        count: u32,
+    ) -> Result<ShardIndex> {
         ensure!(
             reference.path == format::index_path(dir),
             "index for {dir} has unexpected path {}",
@@ -136,6 +149,39 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyOutcome> {
         manifest.metadata.shard_count
             == expected_shard_count(articles, manifest.metadata.shard_size),
         "metadata shard count does not match the article count"
+    );
+    ensure!(
+        manifest.topics.shard_size > 0
+            && manifest.topics.shard_count
+                == expected_shard_count(articles, manifest.topics.shard_size),
+        "topic shard layout does not match the article count"
+    );
+    ensure!(
+        manifest.topics.source.format == topics::FORMAT_NAME
+            && manifest.topics.source.catalog_sha256 == topics::catalog_sha256(),
+        "manifest has unsupported topic source metadata"
+    );
+    ensure!(
+        manifest.topics.threshold.unit == topics::SCORE_UNIT
+            && manifest.topics.threshold.operator == ">="
+            && manifest.topics.threshold.value <= 1_000_000,
+        "manifest has an invalid topic threshold"
+    );
+    let shared_catalog = topics::catalog()?;
+    ensure!(
+        manifest.topics.catalog.len() == 64
+            && manifest
+                .topics
+                .catalog
+                .iter()
+                .zip(&shared_catalog.topics)
+                .enumerate()
+                .all(|(bit, (actual, expected))| {
+                    actual.bit == bit as u32
+                        && actual.id == expected.id
+                        && actual.label == expected.label
+                }),
+        "manifest topic catalog differs from topic-catalog.json"
     );
     ensure!(
         manifest.counts.title_entries == articles + manifest.counts.redirect_aliases,
@@ -207,6 +253,54 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyOutcome> {
         manifest.start_article.title
     );
 
+    // ---- topics ----
+    let topics_index = checker.read_index(
+        &manifest.topics.dir,
+        &manifest.topics.index,
+        format::KIND_TOPICS,
+        manifest.topics.shard_count,
+    )?;
+    let mut topic_counts = [0u32; 64];
+    let mut classified_articles = 0u32;
+    let mut progress = Progress::new("topics");
+    for shard in 0..manifest.topics.shard_count {
+        let bytes = checker.read_shard(&manifest.topics.dir, &topics_index, shard)?;
+        let decoded = TopicMaskShard::decode(&bytes)
+            .with_context(|| format!("decoding topic shard {shard}"))?;
+        let first = shard * manifest.topics.shard_size;
+        let count = manifest.topics.shard_size.min(articles - first);
+        ensure!(
+            decoded.first_ordinal == first && decoded.count() == count,
+            "topic shard {shard} covers the wrong ordinal range"
+        );
+        for mask in decoded.masks {
+            if mask != 0 {
+                classified_articles += 1;
+            }
+            for bit in 0..64 {
+                if mask & (1u64 << bit) != 0 {
+                    topic_counts[bit] += 1;
+                }
+            }
+        }
+        progress.tick(|| format!("{} / {} shards", shard + 1, manifest.topics.shard_count));
+    }
+    progress.done(format!("{} shards", manifest.topics.shard_count));
+    ensure!(
+        classified_articles == manifest.topics.classified_articles,
+        "topic shards classify {classified_articles} articles but the manifest says {}",
+        manifest.topics.classified_articles
+    );
+    for (bit, topic) in manifest.topics.catalog.iter().enumerate() {
+        ensure!(
+            topic.count == topic_counts[bit],
+            "topic {:?} has {} articles but the manifest says {}",
+            topic.id,
+            topic_counts[bit],
+            topic.count
+        );
+    }
+
     // ---- titles ----
     let titles_index = checker.read_index(
         &manifest.titles.dir,
@@ -224,8 +318,8 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyOutcome> {
     };
     for bucket in 0..manifest.titles.bucket_count {
         let bytes = checker.read_shard(&manifest.titles.dir, &titles_index, bucket)?;
-        let decoded =
-            TitleBucket::decode(&bytes).with_context(|| format!("decoding title bucket {bucket}"))?;
+        let decoded = TitleBucket::decode(&bytes)
+            .with_context(|| format!("decoding title bucket {bucket}"))?;
         ensure!(
             decoded.bucket == bucket,
             "title bucket {bucket} is labelled {}",
@@ -377,7 +471,11 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyOutcome> {
     for (list, bytes, label) in [
         (&report.zero_indegree, &report_bytes[1], "zero-indegree"),
         (&report.isolated, &report_bytes[2], "isolated"),
-        (&report.unreachable_from_start, &report_bytes[3], "unreachable"),
+        (
+            &report.unreachable_from_start,
+            &report_bytes[3],
+            "unreachable",
+        ),
     ] {
         ensure!(
             bytes.len() as u64 == list.count as u64 * 4,
@@ -412,7 +510,11 @@ pub fn verify(options: &VerifyOptions) -> Result<VerifyOutcome> {
         for (ordinals, bytes, label) in [
             (&analysis.zero_indegree, &report_bytes[1], "zero-indegree"),
             (&analysis.isolated, &report_bytes[2], "isolated"),
-            (&analysis.unreachable_from_start, &report_bytes[3], "unreachable"),
+            (
+                &analysis.unreachable_from_start,
+                &report_bytes[3],
+                "unreachable",
+            ),
         ] {
             ensure!(
                 &connectivity::encode_ordinal_list(ordinals) == bytes,
@@ -632,8 +734,14 @@ pub fn compare_snapshots(
         ),
         check_share(
             "share in largest component",
-            share(old_report.strongly_connected_components.largest, old_manifest),
-            share(new_report.strongly_connected_components.largest, new_manifest),
+            share(
+                old_report.strongly_connected_components.largest,
+                old_manifest,
+            ),
+            share(
+                new_report.strongly_connected_components.largest,
+                new_manifest,
+            ),
             thresholds.largest_component_share_drop,
         ),
     ];
@@ -720,15 +828,27 @@ mod tests {
 
     #[test]
     fn count_thresholds_are_two_sided() {
-        assert!(check_count("x", 1000, 1000, (0.01, 0.05)).regression.is_none());
-        assert!(check_count("x", 1000, 995, (0.01, 0.05)).regression.is_none());
-        assert!(check_count("x", 1000, 980, (0.01, 0.05)).regression.is_some());
-        assert!(check_count("x", 1000, 1040, (0.01, 0.05)).regression.is_none());
-        assert!(check_count("x", 1000, 1100, (0.01, 0.05)).regression.is_some());
+        assert!(check_count("x", 1000, 1000, (0.01, 0.05))
+            .regression
+            .is_none());
+        assert!(check_count("x", 1000, 995, (0.01, 0.05))
+            .regression
+            .is_none());
+        assert!(check_count("x", 1000, 980, (0.01, 0.05))
+            .regression
+            .is_some());
+        assert!(check_count("x", 1000, 1040, (0.01, 0.05))
+            .regression
+            .is_none());
+        assert!(check_count("x", 1000, 1100, (0.01, 0.05))
+            .regression
+            .is_some());
         assert!(check_count("x", 0, 0, (0.01, 0.05)).regression.is_none());
         assert!(check_count("x", 0, 5, (0.01, 0.05)).regression.is_some());
         // An unbounded decrease is allowed when the limit is infinite.
-        assert!(check_count("x", 1000, 1, (f64::INFINITY, 0.25)).regression.is_none());
+        assert!(check_count("x", 1000, 1, (f64::INFINITY, 0.25))
+            .regression
+            .is_none());
     }
 
     #[test]

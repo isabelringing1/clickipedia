@@ -7,6 +7,8 @@
 import { GraphClient, GraphError, fetchManifest, loadLatest, openSnapshot } from "../wikiGraph/client.js";
 import {
   HISTORY_LIMIT,
+  MANUAL_HISTORY_LIMIT,
+  createRoomState,
   createSave,
   decodeSave,
   encodeSave,
@@ -14,6 +16,12 @@ import {
   importSave,
 } from "../save/saveFormat.js";
 import { Crawler } from "./crawler.js";
+import topicCatalog from "../../topic-catalog.json";
+
+const TOPIC_ROOMS = topicCatalog.topics.map((topic, topicIndex) => ({
+  ...topic,
+  topicIndex,
+}));
 
 export class Session {
   constructor({ baseUrl, graph, state, store, isNew, graphOptions }) {
@@ -23,12 +31,26 @@ export class Session {
     this.store = store;
     this.isNew = isNew;
     this.graphOptions = graphOptions;
-    this.crawler = new Crawler({
-      graph,
-      visited: state.visited,
-      expanded: state.expanded,
-      automation: state.automation,
-    });
+    this.crawlers = new Map();
+    this.automationNovelty = new Map();
+    for (const room of Object.values(state.rooms)) {
+      this.attachCrawler(room);
+    }
+    this.crawler = this.crawlers.get("general");
+    const general = state.rooms.general;
+    state.visited = general.visited;
+    state.expanded = general.expanded;
+    state.automation = general.automation;
+    for (const field of ["autos", "purchasedItems", "history", "nextSeq", "spawnCount"]) {
+      Object.defineProperty(state.game, field, {
+        enumerable: true,
+        configurable: true,
+        get: () => general[field],
+        set: (value) => {
+          general[field] = value;
+        },
+      });
+    }
   }
 
   get game() {
@@ -46,7 +68,7 @@ export class Session {
 
   // Articles opened so far, including the start article.
   get visitedCount() {
-    return this.state.visited.count;
+    return this.state.globalVisited.count;
   }
 
   get startArticle() {
@@ -54,7 +76,57 @@ export class Session {
   }
 
   hasVisited(ordinal) {
-    return this.state.visited.has(ordinal);
+    return this.state.globalVisited.has(ordinal);
+  }
+
+  get rooms() {
+    return this.state.rooms;
+  }
+
+  room(id) {
+    const room = this.rooms[id];
+    if (!room) {
+      throw new RangeError(`room "${id}" is not unlocked`);
+    }
+    return room;
+  }
+
+  attachCrawler(room) {
+    const crawler = new Crawler({
+      graph: this.graph,
+      visited: room.visited,
+      expanded: room.expanded,
+      automation: room.automation,
+      acceptTarget:
+        room.topicIndex === null
+          ? () => true
+          : (ordinal) => this.graph.hasTopic(ordinal, room.topicIndex),
+      onVisit: (ordinal) => {
+        this.automationNovelty.set(
+          `${room.id}:${ordinal}`,
+          this.state.globalVisited.add(ordinal),
+        );
+      },
+      exhausted: room.blocked,
+    });
+    this.crawlers.set(room.id, crawler);
+    return crawler;
+  }
+
+  unlockRoom({ id, label, topicIndex }, root) {
+    if (this.rooms[id]) {
+      return this.rooms[id];
+    }
+    const room = createRoomState({
+      id,
+      label,
+      topicIndex,
+      root,
+      articleCount: this.articleCount,
+    });
+    this.rooms[id] = room;
+    this.attachCrawler(room);
+    return room;
   }
 
   // The canonical title of an article, for display.
@@ -69,7 +141,14 @@ export class Session {
   //   { status: "seen", ordinal, title }      already opened
   //   { status: "opened", ordinal, title }    newly opened
   // Rejects with a GraphError when the graph cannot be read.
-  async openLink(rawTitle, fromOrdinal) {
+  async openLink(roomId, rawTitle, fromOrdinal) {
+    const legacyCall = fromOrdinal === undefined;
+    if (legacyCall) {
+      fromOrdinal = rawTitle;
+      rawTitle = roomId;
+      roomId = "general";
+    }
+    const room = this.room(roomId);
     const match = await this.graph.resolveTitle(rawTitle);
     if (match === null) {
       return { status: "missing" };
@@ -80,15 +159,65 @@ export class Session {
     }
     // Mark the article before any further waiting, so a second click on the
     // same link while a title is loading counts as already opened.
-    const isNew = this.state.visited.add(ordinal);
-    if (isNew) {
-      this.crawler.prioritize(ordinal);
+    const roomNew = room.visited.add(ordinal);
+    const globalNew = roomNew && this.state.globalVisited.add(ordinal);
+    if (roomNew) {
+      this.crawlers.get(roomId).prioritize(ordinal);
+      room.blocked = false;
     }
-    return {
-      status: isNew ? "opened" : "seen",
+    const title = await this.canonicalTitle(match);
+    let topicMask = 0n;
+    try {
+      topicMask = await this.graph.getTopicMask(ordinal);
+    } catch (error) {
+      if (!(error instanceof GraphError)) throw error;
+    }
+    const unlocked = [];
+    // An article can introduce only one room, and only the first time that
+    // article is opened anywhere. Opening it again in another room cannot be
+    // used to unlock another one of its topics.
+    if (globalNew) {
+      for (const definition of TOPIC_ROOMS) {
+        if (
+          (topicMask & (1n << BigInt(definition.topicIndex))) !== 0n &&
+          !this.rooms[definition.id]
+        ) {
+          const unlockedRoom = this.unlockRoom(definition, { ordinal, title });
+          unlockedRoom.newlyUnlocked = true;
+          unlocked.push(definition.id);
+          break;
+        }
+      }
+    }
+    const result = {
+      status: roomNew ? "opened" : "seen",
       ordinal,
-      title: await this.canonicalTitle(match),
+      title,
+      globalNew,
+      topicMask,
+      unlocked,
     };
+    if (legacyCall) {
+      delete result.globalNew;
+      delete result.topicMask;
+      delete result.unlocked;
+    }
+    return result;
+  }
+
+  recordAutomatedOpen(roomId, ordinal) {
+    const room = this.room(roomId);
+    room.topicOpenedCount += 1;
+    const noveltyKey = `${roomId}:${ordinal}`;
+    const recorded = this.automationNovelty.get(noveltyKey);
+    this.automationNovelty.delete(noveltyKey);
+    const globalNew =
+      recorded === undefined ? this.state.globalVisited.add(ordinal) : recorded;
+    if (globalNew) {
+      this.game.knowledge += 1;
+      room.knowledge += 1;
+    }
+    return globalNew;
   }
 
   // A link may name a redirect; show the article's own title when it can be
@@ -109,8 +238,13 @@ export class Session {
 
   // Appends to the bounded display history and returns the new entries.
   // `keepSeq` protects one entry (the article being read) from eviction.
-  addHistory(items, keepSeq) {
-    const { game } = this;
+  addHistory(roomId, items, keepSeq) {
+    if (Array.isArray(roomId)) {
+      keepSeq = items;
+      items = roomId;
+      roomId = "general";
+    }
+    const game = this.room(roomId);
     const added = items.map((item) => {
       const entry = { seq: game.nextSeq, ...item };
       game.nextSeq += 1;
@@ -121,16 +255,49 @@ export class Session {
       return entry;
     });
     let history = [...game.history, ...added];
+    const protectedEntries = new Set(
+      history
+        .filter((entry) => entry.source !== "auto")
+        .slice(-MANUAL_HISTORY_LIMIT)
+        .map((entry) => entry.seq),
+    );
+    if (keepSeq !== undefined) {
+      protectedEntries.add(keepSeq);
+    }
+    for (const entry of history) {
+      if (
+        entry.kind === "quest" &&
+        protectedEntries.has(entry.seq) &&
+        Number.isInteger(entry.articleSeq)
+      ) {
+        protectedEntries.add(entry.articleSeq);
+      }
+    }
+    let dropped = 0;
+    history = history.filter((entry) => {
+      if (entry.source !== "auto" && !protectedEntries.has(entry.seq)) {
+        dropped += 1;
+        return false;
+      }
+      return true;
+    });
     if (history.length > HISTORY_LIMIT) {
       const excess = history.length - HISTORY_LIMIT;
-      let dropped = 0;
+      let capacityDropped = 0;
       history = history.filter((entry) => {
-        if (dropped < excess && entry.seq !== keepSeq) {
-          dropped += 1;
+        if (
+          capacityDropped < excess &&
+          !protectedEntries.has(entry.seq)
+        ) {
+          capacityDropped += 1;
           return false;
         }
         return true;
       });
+      dropped += capacityDropped;
+    }
+    if (dropped > 0) {
+      game.historyDroppedCount += dropped;
     }
     game.history = history;
     return added;

@@ -119,7 +119,7 @@ describe("local verification", () => {
   it("lists exactly the files on disk, manifest last and indexes after shards", () => {
     const { files } = listSnapshotFiles(snapshotDir);
     const paths = files.map((file) => file.path);
-    expect(paths.length).toBe(19);
+    expect(paths.length).toBe(24);
     expect(paths[paths.length - 1]).toBe("manifest.json");
     const firstIndex = paths.findIndex((path) => path.endsWith("/index.bin"));
     const lastShard = paths.findLastIndex((path) => /\/\d{6}\.bin$/.test(path));
@@ -161,11 +161,11 @@ describe("publishSnapshot", () => {
     const wrangler = fakeWrangler();
     const result = await publish(wrangler);
     expect(result.status).toBe("published");
-    expect(result.uploaded).toBe(19);
+    expect(result.uploaded).toBe(24);
 
     const keys = uploadedKeys(wrangler);
-    expect(keys.length).toBe(19);
-    expect(new Set(keys).size).toBe(19);
+    expect(keys.length).toBe(24);
+    expect(new Set(keys).size).toBe(24);
     expect(keys[keys.length - 1]).toBe(`${PREFIX}manifest.json`);
     // Indexes are uploaded only after every shard and report.
     const firstIndex = keys.findIndex((key) => key.endsWith("/index.bin"));
@@ -252,8 +252,8 @@ describe("publishSnapshot", () => {
     expect(result.status).toBe("published");
     const second = uploadedKeys(wrangler);
     expect(second.some((key) => finishedFirst.includes(key))).toBe(false);
-    expect(second.length).toBe(19 - 8);
-    expect(wrangler.objects.size).toBe(19);
+    expect(second.length).toBe(24 - 8);
+    expect(wrangler.objects.size).toBe(24);
     for (const [key, object] of wrangler.objects) {
       expect(object.bytes.equals(readFileSync(join(data, "public", key))), key).toBe(true);
     }
@@ -287,7 +287,7 @@ describe("publishSnapshot", () => {
   it("uploads nothing in a dry run", async () => {
     const wrangler = fakeWrangler();
     const result = await publish(wrangler, { dryRun: true });
-    expect(result).toMatchObject({ status: "dry-run", pending: 19 });
+    expect(result).toMatchObject({ status: "dry-run", pending: 24 });
     expect(uploadedKeys(wrangler)).toEqual([]);
     expect(existsSync(join(data, "publish"))).toBe(false);
   });
@@ -305,9 +305,9 @@ describe("publishSnapshot", () => {
         clock += ms;
       },
     });
-    // 19 objects at 8 per window need three windows, so two waits.
+    // 24 objects at 8 per window need three windows, so two waits.
     expect(waits).toEqual([RATE_WINDOW_MS, RATE_WINDOW_MS]);
-    expect(wrangler.objects.size).toBe(19);
+    expect(wrangler.objects.size).toBe(24);
   });
 
   it("requires a bucket and sane limits", async () => {

@@ -27,5 +27,16 @@
       "bytes": 1474,
       "sha1": "3ba0693dc32263548b979bdd7db4d79ce7c287b0"
     }
+  },
+  "topics": {
+    "file": "tinywiki-20260101-topics.jsonl",
+    "url": "fixture://tinywiki/20260101/tinywiki-20260101-topics.jsonl",
+    "bytes": 513,
+    "sha1": "a2dc9eaefa1341e3f5a1d6649e3366cc66160f28",
+    "format": "clickipedia-topic-scores-jsonl-v1",
+    "model": "fixture-articletopic",
+    "modelVersion": "1",
+    "thresholdMillionths": 600000,
+    "catalogSha256": "ca13ce1b7f8f3454c5ca506c145e42eab4923a71e1cac4c7f662766425eb5e10"
   }
 }

@@ -11,11 +11,13 @@ export const INDEX_ENTRY_BYTES = 36;
 export const KIND_ADJACENCY = 1;
 export const KIND_METADATA = 2;
 export const KIND_TITLES = 3;
+export const KIND_TOPICS = 4;
 
 export const TITLE_FLAG_REDIRECT = 1;
 
 const MAGIC_ADJACENCY = "CKAJ";
 const MAGIC_METADATA = "CKMD";
+const MAGIC_TOPICS = "CKTM";
 const MAGIC_TITLES = "CKTB";
 const MAGIC_INDEX = "CKIX";
 
@@ -173,6 +175,29 @@ export function decodeMetadataShard(data) {
           titles.subarray(titleOffsets[localIndex], titleOffsets[localIndex + 1]),
         ),
       };
+    },
+  };
+}
+
+// One 64-bit topic-membership mask per article ordinal.
+export function decodeTopicMaskShard(data) {
+  const what = "topic mask shard";
+  const bytes = toBytes(data);
+  const [firstOrdinal, count] = readHeader(bytes, MAGIC_TOPICS, what);
+  const expected = HEADER_BYTES + count * 8;
+  if (bytes.length !== expected) {
+    fail(what, `expected ${expected} bytes for ${count} masks, found ${bytes.length}`);
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset + HEADER_BYTES, count * 8);
+  return {
+    firstOrdinal,
+    count,
+    byteLength: bytes.length,
+    mask(localIndex) {
+      if (!Number.isInteger(localIndex) || localIndex < 0 || localIndex >= count) {
+        throw new RangeError(`${what}: local index ${localIndex} is out of range`);
+      }
+      return view.getBigUint64(localIndex * 8, true);
     },
   };
 }

@@ -3,15 +3,16 @@ import { SpinnerCircularFixed } from "spinners-react";
 import questsJson from "./quests.json";
 
 import Article from "./Article";
-import Menu from "./Menu";
-import TopicTaxonomy from "./TopicTaxonomy";
+import Menu, { SharedMenu } from "./Menu";
+import Progress from "./Progress";
+import TopicTaxonomy, { TopicProgress } from "./TopicTaxonomy";
 import Logo from "/Logo.png";
 import Debug from "./Debug";
 import Error from "./Error";
 import Info from "./Info";
 
 import { evictWikiPage, formatTopic } from "./util.js";
-import { AutomationRunner } from "./game/automation.js";
+import { RoomAutomationRunner } from "./game/automation.js";
 import { BootError, bootGame } from "./game/boot.js";
 import { TitleFeed } from "./game/titleFeed.js";
 import { Checkpointer } from "./save/checkpointer.js";
@@ -35,8 +36,11 @@ const AUTOMATION_UI_INTERVAL_MS = 250;
 // burst followed by gaps.
 const TITLE_WINDOW_INTERVAL_MS = 1000;
 
-const isWholeCount = (value) => Number.isInteger(value) && value >= 0;
 const isAnything = () => true;
+const hasTopic = (mask, index) =>
+  typeof mask === "bigint"
+    ? (mask & (1n << BigInt(index))) !== 0n
+    : Boolean(mask?.[index]);
 
 // Saved quests keep a copy of their definition; prefer the current one.
 function refreshQuests(quests) {
@@ -180,43 +184,53 @@ function Game({ session }) {
   const [checkpointer] = useState(
     () => new Checkpointer({ save: () => session.save() }),
   );
-  const [rootEntry] = useState(() => ({
-    seq: 0,
-    kind: "article",
-    ordinal: session.startArticle.ordinal,
-    title: session.startArticle.title,
-    spawn: 0,
-  }));
-
   const [knowledge, setKnowledge, syncKnowledge] = useGameField(
     session,
     checkpointer,
     "knowledge",
     Number.isFinite,
   );
-  const [autos, setAutos] = useGameField(
-    session,
-    checkpointer,
-    "autos",
-    isWholeCount,
-  );
   const [quests, setQuests] = useGameField(session, checkpointer, "quests");
-  const [purchasedItems, setPurchasedItems] = useGameField(
+  const [hasLeftGeneralRoom, setHasLeftGeneralRoom] = useGameField(
     session,
     checkpointer,
-    "purchasedItems",
+    "hasLeftGeneralRoom",
+    (value) => typeof value === "boolean",
   );
-  const [history, setHistory] = useState(session.game.history);
+  const [activeRoomId, setActiveRoomId] = useState(() =>
+    session.rooms[session.game.lastRoomId]
+      ? session.game.lastRoomId
+      : "general",
+  );
+  const [, setRoomRevision] = useState(0);
+  const activeRoom = session.room(activeRoomId);
+  const topicCounts = Object.fromEntries(
+    (session.graph.manifest.topics?.catalog ?? []).map((topic) => [
+      topic.id,
+      topic.count,
+    ]),
+  );
+  const rootEntry = {
+    seq: 0,
+    kind: "article",
+    ordinal: activeRoom.root.ordinal,
+    title: activeRoom.root.title,
+    spawn: 0,
+  };
+  const [history, setHistory] = useState(activeRoom.history);
   const [visitedCount, setVisitedCount] = useState(session.visitedCount);
-  const [automationStatus, setAutomationStatus] = useState("running");
+  const [automationStatuses, setAutomationStatuses] = useState({});
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
-  const [activeView, setActiveView] = useState("articles");
+  const [activeView, setActiveView] = useState(() =>
+    session.game.lastView === "topics" ? "topics" : "articles",
+  );
+  const [roomOrigin, setRoomOrigin] = useState({ x: "50%", y: "50%" });
 
   // Articles are identified by their history sequence number; 0 is the
   // starting article, which is always present.
   const [currentArticle, setCurrentArticle] = useState(() => {
-    const articles = session.game.history.filter(
+    const articles = activeRoom.history.filter(
       (entry) => entry.kind == "article",
     );
     return articles.length > 0 ? articles[articles.length - 1].seq : 0;
@@ -227,6 +241,7 @@ function Game({ session }) {
   const closedArticlesRef = useRef(closedArticles);
   const playerArticleHistory = useRef([0, currentArticle]);
   const automationUiTimer = useRef(null);
+  const activeRoomIdRef = useRef(activeRoomId);
 
   const selectArticle = useCallback((seq) => {
     currentArticleRef.current = seq;
@@ -236,8 +251,13 @@ function Game({ session }) {
   // Adds entries to the bounded history, keeping the article being read.
   const pushHistory = useCallback(
     (items) => {
-      const added = session.addHistory(items, currentArticleRef.current);
-      const live = new Set(session.game.history.map((entry) => entry.seq));
+      const room = session.room(activeRoomIdRef.current);
+      const added = session.addHistory(
+        activeRoomIdRef.current,
+        items,
+        currentArticleRef.current,
+      );
+      const live = new Set(room.history.map((entry) => entry.seq));
       live.add(0);
       playerArticleHistory.current = playerArticleHistory.current
         .filter((seq) => live.has(seq))
@@ -248,9 +268,22 @@ function Game({ session }) {
         closedArticlesRef.current = next;
         return next;
       });
-      setHistory(session.game.history);
+      setHistory(room.history);
       checkpointer.markDirty();
       return added;
+    },
+    [session, checkpointer],
+  );
+
+  const updateActiveRoom = useCallback(
+    (field, update) => {
+      const room = session.room(activeRoomIdRef.current);
+      const next = typeof update === "function" ? update(room[field]) : update;
+      if (!Object.is(next, room[field])) {
+        room[field] = next;
+        setRoomRevision((value) => value + 1);
+        checkpointer.markDirty();
+      }
     },
     [session, checkpointer],
   );
@@ -268,48 +301,80 @@ function Game({ session }) {
 
   // Automation: open articles by following links in the stored graph.
   useEffect(() => {
-    const titles = new TitleFeed({
-      lookup: (ordinal) => session.titleOf(ordinal),
-      shardOf: (ordinal) => session.graph.metadataShardOf(ordinal),
-      isShardCached: (shard) => session.graph.isMetadataShardCached(shard),
-      deliveryIntervalMs: TITLE_WINDOW_INTERVAL_MS,
-      onTitles: (found) =>
-        pushHistory(found.map((entry) => ({ kind: "article", ...entry }))),
-    });
+    const titleFeeds = new Map();
+    const feedFor = (roomId) => {
+      let feed = titleFeeds.get(roomId);
+      if (!feed) {
+        feed = new TitleFeed({
+          lookup: (ordinal) => session.titleOf(ordinal),
+          shardOf: (ordinal) => session.graph.metadataShardOf(ordinal),
+          isShardCached: (shard) => session.graph.isMetadataShardCached(shard),
+          deliveryIntervalMs: TITLE_WINDOW_INTERVAL_MS,
+          onTitles: (found) => {
+            session.addHistory(
+              roomId,
+              found.map((entry) => ({
+                kind: "article",
+                source: "auto",
+                ...entry,
+              })),
+            );
+            if (activeRoomIdRef.current === roomId) {
+              setHistory([...session.room(roomId).history]);
+            }
+            checkpointer.markDirty();
+          },
+        });
+        titleFeeds.set(roomId, feed);
+      }
+      return feed;
+    };
     const flushUi = () => {
       automationUiTimer.current = null;
       syncKnowledge();
       setVisitedCount(session.visitedCount);
+      setRoomRevision((value) => value + 1);
     };
     const scheduleUi = () => {
       if (automationUiTimer.current === null) {
         automationUiTimer.current = setTimeout(flushUi, AUTOMATION_UI_INTERVAL_MS);
       }
     };
-    const runner = new AutomationRunner({
-      crawler: session.crawler,
-      automation: session.state.automation,
-      getAutos: () => session.game.autos,
-      onOpened: (ordinals) => {
+    const runner = new RoomAutomationRunner({
+      getRooms: () =>
+        Object.values(session.rooms).map((room) => ({
+          id: room.id,
+          room,
+          crawler: session.crawlers.get(room.id),
+        })),
+      onOpened: (roomId, ordinals) => {
         // The save is updated synchronously; only its React mirror is
         // throttled. Hiding or closing the page therefore cannot lose opens.
-        session.game.knowledge += ordinals.length;
+        for (const ordinal of ordinals) {
+          session.recordAutomatedOpen(roomId, ordinal);
+        }
         checkpointer.markDirty();
         scheduleUi();
-        titles.push(ordinals);
+        feedFor(roomId).push(ordinals);
       },
-      onStatus: setAutomationStatus,
+      onStatus: (roomId, status) => {
+        const room = session.room(roomId);
+        room.blocked = status === "idle" && room.autos > 0;
+        setAutomationStatuses((current) => ({ ...current, [roomId]: status }));
+        setRoomRevision((value) => value + 1);
+        checkpointer.markDirty();
+      },
     });
     runner.start();
     return () => {
       runner.stop();
-      titles.stop();
+      for (const feed of titleFeeds.values()) feed.stop();
       if (automationUiTimer.current !== null) {
         clearTimeout(automationUiTimer.current);
         automationUiTimer.current = null;
       }
     };
-  }, [session, checkpointer, pushHistory, syncKnowledge]);
+  }, [session, checkpointer, syncKnowledge]);
 
   // Save when the page is hidden or closed; other saves are debounced.
   useEffect(() => {
@@ -419,11 +484,49 @@ function Game({ session }) {
     setError("Non-article link clicked.");
   }, []);
 
+  const enterTopicRoom = useCallback((roomId, target) => {
+    const room = session.rooms[roomId];
+    if (!room) return;
+    const viewport = target.closest(".view-viewport");
+    if (viewport) {
+      const viewportRect = viewport.getBoundingClientRect();
+      const topicRect = target.getBoundingClientRect();
+      setRoomOrigin({
+        x: `${topicRect.left + topicRect.width / 2 - viewportRect.left}px`,
+        y: `${topicRect.top + topicRect.height / 2 - viewportRect.top}px`,
+      });
+    }
+    if (room.newlyUnlocked) {
+      room.newlyUnlocked = false;
+      setRoomRevision((value) => value + 1);
+      checkpointer.markDirty();
+    }
+    activeRoomIdRef.current = roomId;
+    session.game.lastRoomId = roomId;
+    session.game.lastView = "articles";
+    checkpointer.markDirty();
+    setActiveRoomId(roomId);
+    setHistory(room.history);
+    const roomArticles = room.history.filter((entry) => entry.kind === "article");
+    const nextCurrent =
+      roomArticles.length > 0 ? roomArticles[roomArticles.length - 1].seq : 0;
+    currentArticleRef.current = nextCurrent;
+    setCurrentArticle(nextCurrent);
+    closedArticlesRef.current = new Set();
+    setClosedArticles(new Set());
+    playerArticleHistory.current = [0, nextCurrent];
+    setActiveView("articles");
+  }, [session, checkpointer]);
+
   // The player followed a link to `title` from the article `fromOrdinal`.
   const openLink = useCallback(async (title, fromOrdinal) => {
     let result;
     try {
-      result = await session.openLink(title, fromOrdinal);
+      result = await session.openLink(
+        activeRoomIdRef.current,
+        title,
+        fromOrdinal,
+      );
     } catch (linkError) {
       if (!(linkError instanceof GraphError)) {
         throw linkError;
@@ -440,17 +543,52 @@ function Game({ session }) {
     } else if (result.status == "seen") {
       setError("Already opened " + formatTopic(result.title) + "!");
     } else {
-      setKnowledge((current) => current + 1);
+      const room = session.room(activeRoomIdRef.current);
+      if (
+        room.topicIndex !== null &&
+        hasTopic(result.topicMask, room.topicIndex)
+      ) {
+        room.topicOpenedCount += 1;
+      }
+      if (result.globalNew) {
+        room.knowledge += 1;
+        setKnowledge((current) => current + 1);
+      }
       setVisitedCount(session.visitedCount);
+      setRoomRevision((value) => value + 1);
+      checkpointer.markDirty();
+      const unlockedTopicId = result.unlocked[0];
+      const unlockedRoom = unlockedTopicId
+        ? session.room(unlockedTopicId)
+        : null;
       const [entry] = pushHistory([
-        { kind: "article", ordinal: result.ordinal, title: result.title },
+        {
+          kind: "article",
+          ordinal: result.ordinal,
+          title: result.title,
+          ...(unlockedRoom
+            ? {
+                unlockedTopic: {
+                  id: unlockedRoom.id,
+                  label: unlockedRoom.label,
+                },
+              }
+            : {}),
+        },
       ]);
       playerArticleHistory.current.push(entry.seq);
       selectArticle(entry.seq);
     }
-  }, [session, setKnowledge, pushHistory, selectArticle, processSelfLink]);
+  }, [
+    session,
+    setKnowledge,
+    pushHistory,
+    selectArticle,
+    processSelfLink,
+    checkpointer,
+  ]);
 
-  const checkForQuest = useCallback((categories) => {
+  const checkForQuest = useCallback((categories, articleSeq, articleTitle) => {
     const current = session.game.quests;
     for (const id of Object.keys(current)) {
       const questEntry = current[id];
@@ -464,8 +602,12 @@ function Game({ session }) {
       if (categories.includes(latestQuest.category)) {
         setQuests({ ...current, [id]: { ...questEntry, complete: true } });
         setKnowledge((value) => value + latestQuest.reward);
+        session.room(activeRoomIdRef.current).knowledge += latestQuest.reward;
+        setRoomRevision((value) => value + 1);
         console.log("Quest complete: " + questEntry.quest.id);
-        pushHistory([{ kind: "quest" }]);
+        pushHistory([
+          { kind: "quest", articleSeq, title: articleTitle },
+        ]);
         return true;
       }
     }
@@ -476,12 +618,14 @@ function Game({ session }) {
   const recentArticles = new Set(
     articles.slice(-MAX_POPUPS).map((entry) => entry.seq),
   );
+  const showRoomTitle =
+    activeRoomId !== "general" || hasLeftGeneralRoom;
 
   return (
     <div id="content">
       <Debug
-        autos={autos}
-        setAutos={setAutos}
+        autos={activeRoom.autos}
+        setAutos={(update) => updateActiveRoom("autos", update)}
       />
       <Info
         info={info}
@@ -508,42 +652,75 @@ function Game({ session }) {
             </button>
             <img src={Logo} className="game-logo" alt="Clickipedia" />
           </div>
-          <nav className="view-tabs" aria-label="Game view">
-            <button
-              type="button"
-              className={`view-tab${activeView === "articles" ? " active" : ""}`}
-              aria-pressed={activeView === "articles"}
-              onClick={() => setActiveView("articles")}
-            >
-              Articles
-            </button>
-            <button
-              type="button"
-              className={`view-tab${activeView === "topics" ? " active" : ""}`}
-              aria-pressed={activeView === "topics"}
-              onClick={() => setActiveView("topics")}
-            >
-              Topics
-            </button>
-          </nav>
+          <section className="global-stats" aria-label="Global game statistics">
+            <Progress
+              visitedCount={visitedCount}
+              articleCount={session.articleCount}
+              knowledge={knowledge}
+              hideBar
+            />
+          </section>
         </div>
 
-        <div className="view-viewport">
+        <div
+          className={`view-viewport ${activeView}`}
+          style={{
+            "--room-origin-x": roomOrigin.x,
+            "--room-origin-y": roomOrigin.y,
+          }}
+        >
           <div className={`view-track ${activeView}`}>
-            <section
-              className="game-view articles-view"
-              aria-label="Articles"
+            <div
+              className={`articles-view${showRoomTitle ? " has-topic-title" : ""}`}
               aria-hidden={activeView !== "articles"}
               inert={activeView !== "articles"}
             >
+              <section className="article-left">
+                <Menu
+                  key={activeRoomId}
+                  history={history}
+                  historyDroppedCount={activeRoom.historyDroppedCount}
+                  rootEntry={rootEntry}
+                  quests={quests}
+                  anyBlocked={Object.values(session.rooms).some(
+                    (room) => room.blocked,
+                  )}
+                  resurfaceArticle={resurfaceArticle}
+                  leaveRoom={() => {
+                    if (activeRoomId === "general") {
+                      setHasLeftGeneralRoom(true);
+                    }
+                    session.game.lastRoomId = activeRoomId;
+                    session.game.lastView = "topics";
+                    checkpointer.markDirty();
+                    setActiveView("topics");
+                  }}
+                />
+              </section>
+              {showRoomTitle && (
+                <header className="topic-room-header">
+                  <h1 className="topic-room-title">{activeRoom.label}</h1>
+                  <TopicProgress
+                    showTooltip
+                    room={
+                      activeRoomId === "general"
+                        ? { visitedCount }
+                        : activeRoom
+                    }
+                    total={
+                      activeRoomId === "general"
+                        ? session.articleCount
+                        : topicCounts[activeRoom.id] ?? 0
+                    }
+                  />
+                </header>
+              )}
               <main className="game-stage" id="game-stage">
                 {[rootEntry, ...articles].map((entry) => {
                   const id = entry.seq;
                   if (
                     closedArticles.has(id) ||
-                    (id != 0 &&
-                      id != currentArticle &&
-                      !recentArticles.has(id))
+                    (id != 0 && id != currentArticle && !recentArticles.has(id))
                   ) {
                     //don't render more than 50
                     return null;
@@ -553,7 +730,7 @@ function Game({ session }) {
                       isCurrent={id == currentArticle && id != 0}
                       topic={entry.title}
                       ordinal={entry.ordinal}
-                      key={"article-" + id}
+                      key={`${activeRoomId}-article-${id}`}
                       id={id}
                       spawnIndex={entry.spawn}
                       stackIndex={id}
@@ -567,31 +744,35 @@ function Game({ session }) {
                   );
                 })}
               </main>
-
-              <Menu
-                history={history}
-                rootEntry={rootEntry}
-                visitedCount={visitedCount}
-                articleCount={session.articleCount}
-                automationStatus={automationStatus}
-                knowledge={knowledge}
-                setKnowledge={setKnowledge}
-                autos={autos}
-                setAutos={setAutos}
-                quests={quests}
-                resurfaceArticle={resurfaceArticle}
-                setInfo={setInfo}
-                purchasedItems={purchasedItems}
-                setPurchasedItems={setPurchasedItems}
-              />
-            </section>
+            </div>
+            <SharedMenu
+              knowledge={knowledge}
+              autos={activeRoom.autos}
+              automationStatus={
+                automationStatuses[activeRoomId] ?? "running"
+              }
+              setKnowledge={setKnowledge}
+              setAutos={(update) => updateActiveRoom("autos", update)}
+              setInfo={setInfo}
+              purchasedItems={activeRoom.purchasedItems}
+              setPurchasedItems={(update) =>
+                updateActiveRoom("purchasedItems", update)
+              }
+              hidden={activeView === "topics"}
+            />
             <section
-              className="game-view topics-view"
+              className="topics-view"
               aria-label="Topics"
               aria-hidden={activeView !== "topics"}
               inert={activeView !== "topics"}
             >
-              <TopicTaxonomy />
+              <TopicTaxonomy
+                onSelectTopic={enterTopicRoom}
+                rooms={session.rooms}
+                topicCounts={topicCounts}
+                globalVisitedCount={visitedCount}
+                articleCount={session.articleCount}
+              />
             </section>
           </div>
         </div>

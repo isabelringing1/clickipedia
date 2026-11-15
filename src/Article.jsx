@@ -75,12 +75,12 @@ const containPosition = (article, left, top) => {
 const CondensedArticle = memo(function CondensedArticle({
   topic,
   id,
-  spawnIndex,
   stackIndex,
+  position,
+  setPosition,
   resurfaceArticle,
   closeArticle,
 }) {
-  const [position, setPosition] = useState(() => getSpawnPosition(spawnIndex));
   const dragState = useRef(null);
   const dragFrame = useRef(null);
   const suppressClick = useRef(false);
@@ -209,9 +209,10 @@ const CondensedArticle = memo(function CondensedArticle({
       className={`article condensed ${topic}`}
       id={`article-${id}`}
       style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
+        top: `${position?.top ?? 0}px`,
+        left: `${position?.left ?? 0}px`,
         zIndex: stackIndex,
+        visibility: position == null ? "hidden" : "visible",
       }}
       onClick={() => {
         if (suppressClick.current) {
@@ -251,9 +252,10 @@ function FullArticle(props) {
     topic,
     ordinal,
     id,
-    spawnIndex,
     stackIndex,
     isCurrent,
+    position,
+    setPosition,
     resurfaceArticle,
     closeArticle,
     processInvalidArticle,
@@ -264,8 +266,6 @@ function FullArticle(props) {
 
   const [content, setContent] = useState(null);
 
-  const [posTop, setPosTop] = useState(id == 0 ? 0 : null);
-  const [posLeft, setPosLeft] = useState(id == 0 ? 0 : null);
   const [stageSize, setStageSize] = useState(getStageSize);
   const [showHighlight, setShowHighlight] = useState(false);
   const dragState = useRef(null);
@@ -275,16 +275,12 @@ function FullArticle(props) {
   var isCondensed = !isCurrent && id != 0;
   const [playSound] = useSound(clickSound);
 
-  useLayoutEffect(() => {
-    if (id == 0) {
-      return;
-    }
+  const posTop = position?.top ?? null;
+  const posLeft = position?.left ?? null;
 
-    const position = getSpawnPosition(spawnIndex);
-    setPosLeft(position.left);
-    setPosTop(position.top);
+  useLayoutEffect(() => {
     setStageSize(getStageSize());
-  }, [id, spawnIndex]);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -310,8 +306,15 @@ function FullArticle(props) {
         width: stage.clientWidth,
         height: stage.clientHeight,
       });
-      setPosLeft((left) => containPosition(article, left, 0).left);
-      setPosTop((top) => containPosition(article, 0, top).top);
+      setPosition((current) => {
+        if (!current) {
+          return current;
+        }
+        const next = containPosition(article, current.left, current.top);
+        return next.left == current.left && next.top == current.top
+          ? current
+          : next;
+      });
     };
 
     keepArticleContained();
@@ -320,7 +323,7 @@ function FullArticle(props) {
     resizeObserver.observe(article);
 
     return () => resizeObserver.disconnect();
-  }, [id]);
+  }, [id, setPosition]);
 
   const checkForQuestRef = useRef(checkForQuest);
   useEffect(() => {
@@ -345,7 +348,7 @@ function FullArticle(props) {
     async function getContent() {
       const page = await fetchWikiPage(topic);
       setContent(page.html);
-      if (checkForQuestRef.current(page.categories, id)) {
+      if (checkForQuestRef.current(page.categories, id, topic)) {
         setShowHighlight(true);
       }
     }
@@ -496,8 +499,7 @@ function FullArticle(props) {
       drag.article.style.left = `${nextPosition.left}px`;
       drag.article.style.top = `${nextPosition.top}px`;
       drag.article.style.transform = "";
-      setPosLeft(nextPosition.left);
-      setPosTop(nextPosition.top);
+      setPosition(nextPosition);
 
       if (e.type === "pointercancel") {
         suppressClick.current = false;
@@ -625,10 +627,22 @@ const MemoFullArticle = memo(FullArticle);
 // Switching between these two component types intentionally unmounts the
 // heavy article body when it returns to the background.
 function Article(props) {
+  const { id, spawnIndex } = props;
+  const [position, setPosition] = useState(() =>
+    id == 0 ? { left: 0, top: 0 } : null,
+  );
+
+  useLayoutEffect(() => {
+    if (id != 0 && position == null) {
+      setPosition(getSpawnPosition(spawnIndex));
+    }
+  }, [id, position, spawnIndex]);
+
+  const positionedProps = { ...props, position, setPosition };
   if (!props.isCurrent && props.id != 0) {
-    return <CondensedArticle {...props} />;
+    return <CondensedArticle {...positionedProps} />;
   }
-  return <MemoFullArticle {...props} />;
+  return <MemoFullArticle {...positionedProps} />;
 }
 
 export default memo(Article);

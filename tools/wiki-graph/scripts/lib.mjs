@@ -24,6 +24,7 @@ export const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 export const LATEST_CACHE_CONTROL = "public, max-age=60, must-revalidate";
 
 const SNAPSHOT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const INDEX_KINDS = { adjacency: 1, metadata: 2, titles: 3, topics: 4 };
 
 // A problem the operator can act on; printed without a stack trace.
 export class UsageError extends Error {
@@ -117,10 +118,13 @@ export function listSnapshotFiles(snapshotDir) {
 
   const shards = [];
   const indexes = [];
-  for (const kind of ["adjacency", "metadata", "titles"]) {
+  for (const kind of ["adjacency", "metadata", "topics", "titles"]) {
     const section = manifest[kind];
     const index = decodeShardIndex(readFileSync(join(snapshotDir, section.index.path)));
     const count = kind === "titles" ? section.bucketCount : section.shardCount;
+    if (index.kind !== INDEX_KINDS[kind]) {
+      throw new UsageError(`${section.index.path} has file kind ${index.kind}, expected ${INDEX_KINDS[kind]}.`);
+    }
     if (index.count !== count) {
       throw new UsageError(`${section.index.path} lists ${index.count} shards, expected ${count}.`);
     }

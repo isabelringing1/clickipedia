@@ -6,6 +6,7 @@
 // long-lived caching for snapshot files, short caching for latest.json).
 
 import { GraphError, loadLatest, normalizeBaseUrl, openSnapshot } from "../../../src/wikiGraph/client.js";
+import { decodeShardIndex, shardPath } from "../../../src/wikiGraph/codec.js";
 import {
   IMMUTABLE_CACHE_CONTROL,
   LATEST_CACHE_CONTROL,
@@ -45,6 +46,24 @@ function pickIndexes(count, samples, random) {
 
 function normalizeHeader(value) {
   return (value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function checkTopicShard(buffer, firstOrdinal, count, path) {
+  const bytes = new Uint8Array(buffer);
+  if (
+    bytes.length !== 16 + count * 8 ||
+    String.fromCharCode(...bytes.subarray(0, 4)) !== "CKTM"
+  ) {
+    throw new GraphError("corrupt", `${path} is not a topic mask shard of the expected length.`);
+  }
+  const view = new DataView(buffer);
+  if (
+    view.getUint32(4, true) !== 1 ||
+    view.getUint32(8, true) !== firstOrdinal ||
+    view.getUint32(12, true) !== count
+  ) {
+    throw new GraphError("corrupt", `${path} does not cover the range its name implies.`);
+  }
 }
 
 export async function verifyPublicSnapshot({
@@ -114,6 +133,25 @@ export async function verifyPublicSnapshot({
         await graph.loadShard(kind, index);
       }
       log(`  ${kind}: ${indexes.length} of ${count} shards match their recorded hashes`);
+    }
+    const topics = manifest.topics;
+    const topicIndexBuffer = await graph.fetchFile(topics.index.path, topics.index);
+    const topicIndex = decodeShardIndex(topicIndexBuffer);
+    if (topicIndex.kind !== 4 || topicIndex.count !== topics.shardCount) {
+      problem(`${topics.index.path} does not describe the topic shards`);
+    } else {
+      const indexes = pickIndexes(
+        topics.shardCount,
+        all ? topics.shardCount : samples,
+        sampler(`${snapshotId}:topics`),
+      );
+      for (const index of indexes) {
+        const path = shardPath(topics.dir, index);
+        const buffer = await graph.fetchFile(path, topicIndex.entry(index));
+        const first = index * topics.shardSize;
+        checkTopicShard(buffer, first, Math.min(topics.shardSize, graph.articleCount - first), path);
+      }
+      log(`  topics: ${indexes.length} of ${topics.shardCount} shards match their recorded hashes`);
     }
 
     const start = manifest.startArticle;

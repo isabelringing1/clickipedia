@@ -15,15 +15,18 @@ use anyhow::{bail, ensure, Context, Result};
 use crate::connectivity::{self, CsrBuilder};
 use crate::extsort::EdgeSorter;
 use crate::format::{
-    self, AdjacencyShard, IndexEntry, MetadataShard, ShardIndex, TitleBucket, TITLE_FLAG_REDIRECT,
+    self, AdjacencyShard, IndexEntry, MetadataShard, ShardIndex, TitleBucket, TopicMaskShard,
+    TITLE_FLAG_REDIRECT,
 };
 use crate::manifest::{
     self, Counts, FileRef, Generator, Manifest, ManifestSource, RangeShards, SourceLock,
-    StartArticle, TitleBuckets, MANIFEST_FILE, SCHEMA_VERSION, TABLES,
+    StartArticle, TitleBuckets, TopicCatalogEntry, TopicSourceMetadata, TopicThreshold, Topics,
+    MANIFEST_FILE, SCHEMA_VERSION, TABLES,
 };
 use crate::pages::{PageTable, RedirectStats, MAIN_NAMESPACE, NONE};
 use crate::sql::{open_dump, Row};
 use crate::titles::{bucket_for, normalize_title, TITLE_HASH_NAME};
+use crate::topics::{self, TopicReader};
 use crate::util::{
     human_bytes, human_count, sha1_file, sha256, sha256_hex, write_file_atomic, Progress,
 };
@@ -284,8 +287,12 @@ impl LinkTargets {
     }
 }
 
-fn check_input(lock: &SourceLock, dumps_dir: &Path, table: &str, verify: bool) -> Result<PathBuf> {
-    let source = lock.file(table);
+fn check_locked_file(
+    source: &manifest::SourceFile,
+    dumps_dir: &Path,
+    label: &str,
+    verify: bool,
+) -> Result<PathBuf> {
     let path = dumps_dir.join(&source.file);
     let metadata = fs::metadata(&path).with_context(|| {
         format!(
@@ -295,7 +302,7 @@ fn check_input(lock: &SourceLock, dumps_dir: &Path, table: &str, verify: bool) -
     })?;
     ensure!(
         metadata.len() == source.bytes,
-        "{} is {} bytes but the source lock expects {}",
+        "{label} input {} is {} bytes but the source lock expects {}",
         path.display(),
         metadata.len(),
         source.bytes
@@ -304,7 +311,7 @@ fn check_input(lock: &SourceLock, dumps_dir: &Path, table: &str, verify: bool) -
         let (_, sha1) = sha1_file(&path)?;
         ensure!(
             sha1.eq_ignore_ascii_case(&source.sha1),
-            "{} has SHA-1 {sha1} but the source lock expects {}",
+            "{label} input {} has SHA-1 {sha1} but the source lock expects {}",
             path.display(),
             source.sha1
         );
@@ -312,7 +319,15 @@ fn check_input(lock: &SourceLock, dumps_dir: &Path, table: &str, verify: bool) -
     Ok(path)
 }
 
-fn write_metadata_shards(root: &Path, pages: &PageTable, shard_size: u32) -> Result<(FileRef, u32, u64)> {
+fn check_input(lock: &SourceLock, dumps_dir: &Path, table: &str, verify: bool) -> Result<PathBuf> {
+    check_locked_file(lock.file(table), dumps_dir, table, verify)
+}
+
+fn write_metadata_shards(
+    root: &Path,
+    pages: &PageTable,
+    shard_size: u32,
+) -> Result<(FileRef, u32, u64)> {
     let mut sink = ShardSink::new(root, format::DIR_METADATA, format::KIND_METADATA)?;
     let articles = pages.article_count();
     let mut first = 0u32;
@@ -335,6 +350,50 @@ fn write_metadata_shards(root: &Path, pages: &PageTable, shard_size: u32) -> Res
         first += count;
     }
     sink.finish()
+}
+
+fn write_topic_shards(
+    root: &Path,
+    pages: &PageTable,
+    source_path: &Path,
+    threshold: u32,
+    shard_size: u32,
+) -> Result<(FileRef, u32, u64, Vec<u32>, u32)> {
+    let catalog = topics::catalog()?;
+    let mut reader = TopicReader::open(source_path, threshold, &catalog)?;
+    let mut sink = ShardSink::new(root, format::DIR_TOPICS, format::KIND_TOPICS)?;
+    let articles = pages.article_count();
+    let mut counts = vec![0u32; 64];
+    let mut classified = 0u32;
+    let mut first = 0u32;
+    while first < articles {
+        let count = shard_size.min(articles - first);
+        let mut masks = Vec::with_capacity(count as usize);
+        for ordinal in first..first + count {
+            let page = pages.article_page(ordinal);
+            let mask = reader.mask_for(pages.page_id(page))?;
+            if mask != 0 {
+                classified += 1;
+            }
+            for bit in 0..64 {
+                if mask & (1u64 << bit) != 0 {
+                    counts[bit] += 1;
+                }
+            }
+            masks.push(mask);
+        }
+        sink.write(
+            &TopicMaskShard {
+                first_ordinal: first,
+                masks,
+            }
+            .encode(),
+        )?;
+        first += count;
+    }
+    reader.finish()?;
+    let (index, shard_count, bytes) = sink.finish()?;
+    Ok((index, shard_count, bytes, counts, classified))
 }
 
 fn write_title_buckets(
@@ -402,9 +461,18 @@ pub fn build(options: &BuildOptions) -> Result<BuildSummary> {
         "snapshot ID {:?} must be 1-64 characters of [A-Za-z0-9_-]",
         options.snapshot_id
     );
-    ensure!(options.adjacency_shard_size > 0, "adjacency shard size must be positive");
-    ensure!(options.metadata_shard_size > 0, "metadata shard size must be positive");
-    ensure!(options.title_bucket_count > 0, "title bucket count must be positive");
+    ensure!(
+        options.adjacency_shard_size > 0,
+        "adjacency shard size must be positive"
+    );
+    ensure!(
+        options.metadata_shard_size > 0,
+        "metadata shard size must be positive"
+    );
+    ensure!(
+        options.title_bucket_count > 0,
+        "title bucket count must be positive"
+    );
     if options.snapshot_dir.exists() && !options.force {
         bail!(
             "{} already exists; published snapshots are immutable. Choose a new \
@@ -421,6 +489,24 @@ pub fn build(options: &BuildOptions) -> Result<BuildSummary> {
         let path = check_input(lock, &options.dumps_dir, table, options.verify_inputs)?;
         inputs.insert(table, path);
     }
+    let topic_lock = lock.topics.as_ref().context(
+        "source lock has no pinned topic source; normalize a dated classification export and add `topics` to the lock",
+    )?;
+    ensure!(
+        topic_lock.format == topics::FORMAT_NAME,
+        "unsupported topic source format {:?}",
+        topic_lock.format
+    );
+    ensure!(
+        topic_lock.catalog_sha256 == topics::catalog_sha256(),
+        "topic source catalog hash does not match topic-catalog.json"
+    );
+    let topic_input = check_locked_file(
+        &topic_lock.source,
+        &options.dumps_dir,
+        "topics",
+        options.verify_inputs,
+    )?;
 
     let out = building_dir(&options.snapshot_dir)?;
     if out.exists() {
@@ -471,6 +557,14 @@ pub fn build(options: &BuildOptions) -> Result<BuildSummary> {
         write_metadata_shards(&out, &pages, options.metadata_shard_size)?;
     let (titles_index, title_bucket_count, titles_bytes, title_entries) =
         write_title_buckets(&out, &pages, options.title_bucket_count)?;
+    let (topics_index, topics_count, topics_bytes, topic_counts, classified_articles) =
+        write_topic_shards(
+            &out,
+            &pages,
+            &topic_input,
+            topic_lock.threshold_millionths,
+            options.metadata_shard_size,
+        )?;
     ensure!(
         title_entries == article_count + redirects.aliases,
         "title index has {title_entries} entries but {} were expected",
@@ -641,6 +735,12 @@ pub fn build(options: &BuildOptions) -> Result<BuildSummary> {
                     sha1: source.sha1.to_ascii_lowercase(),
                 }
             })
+            .chain(std::iter::once(ManifestSource {
+                table: "topics".to_string(),
+                file: topic_lock.source.file.clone(),
+                bytes: topic_lock.source.bytes,
+                sha1: topic_lock.source.sha1.to_ascii_lowercase(),
+            }))
             .collect(),
         counts: Counts {
             articles: article_count,
@@ -664,6 +764,35 @@ pub fn build(options: &BuildOptions) -> Result<BuildSummary> {
             shard_size: options.metadata_shard_size,
             shard_count: metadata_count,
             index: metadata_index,
+        },
+        topics: Topics {
+            dir: format::DIR_TOPICS.to_string(),
+            shard_size: options.metadata_shard_size,
+            shard_count: topics_count,
+            index: topics_index,
+            catalog: topics::catalog()?
+                .topics
+                .into_iter()
+                .enumerate()
+                .map(|(bit, topic)| TopicCatalogEntry {
+                    id: topic.id,
+                    label: topic.label,
+                    bit: bit as u32,
+                    count: topic_counts[bit],
+                })
+                .collect(),
+            threshold: TopicThreshold {
+                unit: topics::SCORE_UNIT.to_string(),
+                value: topic_lock.threshold_millionths,
+                operator: ">=".to_string(),
+            },
+            source: TopicSourceMetadata {
+                format: topic_lock.format.clone(),
+                model: topic_lock.model.clone(),
+                model_version: topic_lock.model_version.clone(),
+                catalog_sha256: topic_lock.catalog_sha256.to_ascii_lowercase(),
+            },
+            classified_articles,
         },
         titles: TitleBuckets {
             dir: format::DIR_TITLES.to_string(),
@@ -689,11 +818,20 @@ pub fn build(options: &BuildOptions) -> Result<BuildSummary> {
         )
     })?;
 
-    let total_bytes =
-        adjacency_bytes + metadata_bytes + titles_bytes + report_bytes + manifest_bytes.len() as u64;
-    // Shards, three index files, four reports, and the manifest.
-    let file_count =
-        adjacency_count as u64 + metadata_count as u64 + title_bucket_count as u64 + 3 + 4 + 1;
+    let total_bytes = adjacency_bytes
+        + metadata_bytes
+        + topics_bytes
+        + titles_bytes
+        + report_bytes
+        + manifest_bytes.len() as u64;
+    // Shards, four index files, four reports, and the manifest.
+    let file_count = adjacency_count as u64
+        + metadata_count as u64
+        + topics_count as u64
+        + title_bucket_count as u64
+        + 4
+        + 4
+        + 1;
     eprintln!(
         "Built snapshot {}: {} articles, {} edges, {} title entries, {} files, {}",
         options.snapshot_id,
@@ -732,7 +870,8 @@ mod tests {
     fn decode_all(root: &Path, count: u32) -> Vec<AdjacencyShard> {
         (0..count)
             .map(|i| {
-                let bytes = fs::read(root.join(format::shard_path(format::DIR_ADJACENCY, i))).unwrap();
+                let bytes =
+                    fs::read(root.join(format::shard_path(format::DIR_ADJACENCY, i))).unwrap();
                 AdjacencyShard::decode(&bytes).unwrap()
             })
             .collect()
@@ -741,7 +880,8 @@ mod tests {
     #[test]
     fn adjacency_writer_emits_every_shard_including_empty_ones() {
         let dir = tempfile::tempdir().unwrap();
-        let sink = ShardSink::new(dir.path(), format::DIR_ADJACENCY, format::KIND_ADJACENCY).unwrap();
+        let sink =
+            ShardSink::new(dir.path(), format::DIR_ADJACENCY, format::KIND_ADJACENCY).unwrap();
         // 11 articles in shards of 4: ranges [0,4), [4,8), [8,11).
         let mut writer = AdjacencyWriter::new(sink, 4, 11);
         for (source, target) in [(1, 0), (1, 5), (3, 2), (9, 1)] {
@@ -768,9 +908,11 @@ mod tests {
         assert_eq!(decoded_index.kind, format::KIND_ADJACENCY);
         assert_eq!(decoded_index.entries.len(), 3);
         for (i, entry) in decoded_index.entries.iter().enumerate() {
-            let bytes =
-                fs::read(dir.path().join(format::shard_path(format::DIR_ADJACENCY, i as u32)))
-                    .unwrap();
+            let bytes = fs::read(
+                dir.path()
+                    .join(format::shard_path(format::DIR_ADJACENCY, i as u32)),
+            )
+            .unwrap();
             assert_eq!(entry.bytes as usize, bytes.len());
             assert_eq!(entry.sha256, sha256(&bytes));
         }
@@ -779,7 +921,8 @@ mod tests {
     #[test]
     fn adjacency_writer_handles_no_edges_and_exact_multiples() {
         let dir = tempfile::tempdir().unwrap();
-        let sink = ShardSink::new(dir.path(), format::DIR_ADJACENCY, format::KIND_ADJACENCY).unwrap();
+        let sink =
+            ShardSink::new(dir.path(), format::DIR_ADJACENCY, format::KIND_ADJACENCY).unwrap();
         let writer = AdjacencyWriter::new(sink, 4, 8);
         let (_, count, _) = writer.finish().unwrap();
         assert_eq!(count, 2);

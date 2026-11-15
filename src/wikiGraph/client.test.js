@@ -155,6 +155,8 @@ describe("openSnapshot", () => {
     );
     expect(code({ ...manifest, startArticle: { title: "X", ordinal: 10 } })).toBe("corrupt");
     expect(code({ ...manifest, metadata: undefined })).toBe("corrupt");
+    expect(code({ ...manifest, topics: undefined })).toBe("accepted");
+    expect(code({ ...manifest, topics: {} })).toBe("corrupt");
     expect(code(null)).toBe("corrupt");
   });
 });
@@ -201,6 +203,33 @@ describe("adjacency and metadata lookups", () => {
     }
   });
 
+  it("returns multi-label topic membership", async () => {
+    const graph = await open();
+    const videoGames = graph.manifest.topics.catalog.find(
+      (topic) => topic.id === "video-games",
+    ).bit;
+    const computing = graph.manifest.topics.catalog.find(
+      (topic) => topic.id === "computing",
+    ).bit;
+    expect(await graph.hasTopic(0, videoGames)).toBe(true);
+    expect(await graph.hasTopic(0, computing)).toBe(true);
+    expect(await graph.hasTopic(1, videoGames)).toBe(true);
+    expect(await graph.hasTopic(1, computing)).toBe(false);
+  });
+
+  it("runs General-only against snapshots built before topic shards", async () => {
+    const manifest = bucket.json(`${ROOT}manifest.json`);
+    delete manifest.topics;
+    const graph = new GraphClient({
+      baseUrl: BASE_URL,
+      manifest,
+      options: fastOptions(bucket),
+    });
+    expect(graph.hasTopics).toBe(false);
+    expect(await graph.getTopicMask(0)).toBe(0n);
+    expect(await graph.hasTopic(0, 0)).toBe(false);
+  });
+
   it("only links to articles that exist", async () => {
     const graph = await open();
     for (let ordinal = 0; ordinal < graph.articleCount; ordinal += 1) {
@@ -216,6 +245,7 @@ describe("adjacency and metadata lookups", () => {
     for (const ordinal of [-1, expected.counts.articles, 1.5, NaN, "0"]) {
       await expect(graph.getNeighbors(ordinal)).rejects.toThrow(RangeError);
       await expect(graph.getArticle(ordinal)).rejects.toThrow(RangeError);
+      await expect(graph.getTopicMask(ordinal)).rejects.toThrow(RangeError);
     }
   });
 

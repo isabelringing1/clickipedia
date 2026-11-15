@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { Bitset, byteLengthFor, nextInDifference } from "./bitset.js";
+import { Bitset, SparseBitset, byteLengthFor, nextInDifference } from "./bitset.js";
 
 describe("Bitset", () => {
   it("adds, tests, and counts members", () => {
@@ -180,5 +180,20 @@ describe("nextInDifference", () => {
 
   it("requires equal sizes", () => {
     expect(() => nextInDifference(new Bitset(8), new Bitset(9), 0, 8)).toThrow(RangeError);
+  });
+});
+
+describe("SparseBitset", () => {
+  it("allocates only touched chunks and round-trips them", () => {
+    const bits = new SparseBitset(7_250_000);
+    for (const index of [0, 31, 32, 1_000_000, 7_249_999]) {
+      bits.add(index);
+    }
+    expect(bits.chunks.size).toBe(3);
+    const copy = SparseBitset.fromChunks(bits.size, bits.toChunks());
+    expect(copy.count).toBe(5);
+    expect(nextInDifference(copy, new SparseBitset(bits.size), 33, bits.size)).toBe(
+      1_000_000,
+    );
   });
 });

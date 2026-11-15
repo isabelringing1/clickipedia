@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{ensure, Context, Result};
 
-use crate::format::{self, AdjacencyShard, MetadataShard, TitleBucket, TITLE_FLAG_REDIRECT};
+use crate::format::{
+    self, AdjacencyShard, MetadataShard, TitleBucket, TopicMaskShard, TITLE_FLAG_REDIRECT,
+};
 use crate::manifest::Manifest;
 use crate::titles::{bucket_for, normalize_title};
 
@@ -119,5 +121,23 @@ impl SnapshotReader {
             page_id: decoded.page_ids[local],
             title: String::from_utf8_lossy(decoded.title(local)).into_owned(),
         })
+    }
+
+    pub fn topic_mask(&self, ordinal: u32) -> Result<u64> {
+        self.check_ordinal(ordinal)?;
+        let topics = &self.manifest.topics;
+        let shard = ordinal / topics.shard_size;
+        let bytes = self.read(&format::shard_path(&topics.dir, shard))?;
+        let decoded = TopicMaskShard::decode(&bytes)?;
+        ensure!(
+            decoded.first_ordinal == shard * topics.shard_size,
+            "topic shard {shard} starts at the wrong ordinal"
+        );
+        let local = (ordinal - decoded.first_ordinal) as usize;
+        ensure!(
+            local < decoded.count() as usize,
+            "topic shard {shard} does not contain ordinal {ordinal}"
+        );
+        Ok(decoded.masks[local])
     }
 }

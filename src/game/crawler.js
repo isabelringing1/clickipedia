@@ -17,17 +17,30 @@ import { nextInDifference } from "../save/bitset.js";
 import { NO_SOURCE, PRIORITY_LIMIT } from "../save/saveFormat.js";
 
 export class Crawler {
-  constructor({ graph, visited, expanded, automation, now = () => performance.now() }) {
+  constructor({
+    graph,
+    visited,
+    expanded,
+    automation,
+    acceptTarget = () => true,
+    onVisit = () => {},
+    exhausted = false,
+    now = () => performance.now(),
+  }) {
     this.graph = graph;
     this.visited = visited;
     this.expanded = expanded;
     this.automation = automation;
+    this.acceptTarget = acceptTarget;
+    this.onVisit = onVisit;
     this.now = now;
     this.currentShard = -1;
+    this.exhausted = exhausted;
   }
 
   // Asks the crawler to follow this article's links soon.
   prioritize(ordinal) {
+    this.exhausted = false;
     const { priority } = this.automation;
     priority.push(ordinal);
     if (priority.length > PRIORITY_LIMIT) {
@@ -80,13 +93,18 @@ export class Crawler {
     const bot = this.automation.bots[0];
     const opened = [];
     const started = this.now();
-    let exhausted = false;
+    let exhausted = this.exhausted;
+
+    if (exhausted) {
+      return { opened, exhausted: true };
+    }
 
     while (opened.length < budget) {
       if (bot.source === NO_SOURCE) {
         const next = this.pickSource();
         if (next === -1) {
           exhausted = true;
+          this.exhausted = true;
           break;
         }
         bot.source = next;
@@ -106,7 +124,8 @@ export class Crawler {
       while (cursor < neighbors.length && opened.length < budget) {
         const target = neighbors[cursor];
         cursor += 1;
-        if (this.visited.add(target)) {
+        if ((await this.acceptTarget(target)) && this.visited.add(target)) {
+          this.onVisit(target);
           opened.push(target);
         }
       }

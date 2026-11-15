@@ -13,14 +13,17 @@ use anyhow::{bail, ensure, Context, Result};
 
 use crate::build::{build, BuildOptions, BuildSummary, DEFAULT_START_TITLE};
 use crate::manifest::{
-    self, Latest, SourceFile, SourceLock, LATEST_FILE, MANIFEST_FILE, SCHEMA_VERSION,
-    SNAPSHOTS_DIR, TABLES,
+    self, Latest, SourceFile, SourceLock, TopicSourceLock, LATEST_FILE, MANIFEST_FILE,
+    SCHEMA_VERSION, SNAPSHOTS_DIR, TABLES,
 };
+use crate::topics;
 use crate::util::{sha1_file, sha256_hex, write_file_atomic};
 
 pub const FIXTURE_WIKI: &str = "tinywiki";
 pub const FIXTURE_DATE: &str = "20260101";
 pub const FIXTURE_SOURCE_FILE: &str = "source.json";
+pub const FIXTURE_TOPICS_FILE: &str = "tinywiki-20260101-topics.jsonl";
+pub const FIXTURE_TOPIC_THRESHOLD: u32 = 600_000;
 
 // Deliberately tiny so the ten fixture articles span several shards, several
 // title buckets, and several sort runs.
@@ -30,7 +33,9 @@ pub const FIXTURE_TITLE_BUCKETS: u32 = 4;
 pub const FIXTURE_SORT_CAPACITY: usize = 5;
 
 pub fn fixture_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures").join("tiny")
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures")
+        .join("tiny")
 }
 
 pub fn fixture_dumps_dir() -> PathBuf {
@@ -58,15 +63,35 @@ pub fn fixture_lock(dumps_dir: &Path) -> Result<SourceLock> {
             },
         );
     }
+    let (bytes, sha1) = sha1_file(&dumps_dir.join(FIXTURE_TOPICS_FILE))?;
     Ok(SourceLock {
         schema_version: SCHEMA_VERSION,
         wiki: FIXTURE_WIKI.to_string(),
         dump_date: FIXTURE_DATE.to_string(),
         files,
+        topics: Some(TopicSourceLock {
+            source: SourceFile {
+                url: format!("fixture://{FIXTURE_WIKI}/{FIXTURE_DATE}/{FIXTURE_TOPICS_FILE}"),
+                file: FIXTURE_TOPICS_FILE.to_string(),
+                bytes,
+                sha1,
+                md5: None,
+            },
+            format: topics::FORMAT_NAME.to_string(),
+            model: "fixture-articletopic".to_string(),
+            model_version: "1".to_string(),
+            threshold_millionths: FIXTURE_TOPIC_THRESHOLD,
+            catalog_sha256: topics::catalog_sha256(),
+        }),
     })
 }
 
-pub fn fixture_options(lock: SourceLock, dumps_dir: &Path, work_dir: &Path, public_dir: &Path) -> BuildOptions {
+pub fn fixture_options(
+    lock: SourceLock,
+    dumps_dir: &Path,
+    work_dir: &Path,
+    public_dir: &Path,
+) -> BuildOptions {
     BuildOptions {
         lock,
         dumps_dir: dumps_dir.to_path_buf(),
@@ -93,8 +118,8 @@ pub fn write_latest(public_dir: &Path, snapshot_id: &str) -> Result<Latest> {
         .join(SNAPSHOTS_DIR)
         .join(snapshot_id)
         .join(MANIFEST_FILE);
-    let bytes = fs::read(&manifest_path)
-        .with_context(|| format!("reading {}", manifest_path.display()))?;
+    let bytes =
+        fs::read(&manifest_path).with_context(|| format!("reading {}", manifest_path.display()))?;
     let parsed: manifest::Manifest = serde_json::from_slice(&bytes)
         .with_context(|| format!("parsing {}", manifest_path.display()))?;
     ensure!(
@@ -109,7 +134,10 @@ pub fn write_latest(public_dir: &Path, snapshot_id: &str) -> Result<Latest> {
         manifest_path: manifest::snapshot_manifest_path(snapshot_id),
         manifest_sha256: sha256_hex(&bytes),
     };
-    write_file_atomic(&public_dir.join(LATEST_FILE), &manifest::to_pretty_json(&latest)?)?;
+    write_file_atomic(
+        &public_dir.join(LATEST_FILE),
+        &manifest::to_pretty_json(&latest)?,
+    )?;
     Ok(latest)
 }
 
@@ -155,7 +183,10 @@ pub fn read_tree(root: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
 }
 
 /// Describes how two directory trees differ; empty when identical.
-pub fn diff_trees(expected: &BTreeMap<String, Vec<u8>>, actual: &BTreeMap<String, Vec<u8>>) -> Vec<String> {
+pub fn diff_trees(
+    expected: &BTreeMap<String, Vec<u8>>,
+    actual: &BTreeMap<String, Vec<u8>>,
+) -> Vec<String> {
     let mut differences = Vec::new();
     for (path, bytes) in expected {
         match actual.get(path) {
@@ -182,7 +213,10 @@ pub fn run(check: bool) -> Result<()> {
     if check {
         let built_public = scratch.path().join("public");
         build_fixture(&built_public, &scratch.path().join("work"))?;
-        let mut differences = diff_trees(&read_tree(&built_public)?, &read_tree(&fixture_public_dir())?);
+        let mut differences = diff_trees(
+            &read_tree(&built_public)?,
+            &read_tree(&fixture_public_dir())?,
+        );
         let checked_in_lock = fs::read(dir.join(FIXTURE_SOURCE_FILE)).unwrap_or_default();
         if checked_in_lock != lock_bytes {
             differences.push(format!("differs: {FIXTURE_SOURCE_FILE}"));

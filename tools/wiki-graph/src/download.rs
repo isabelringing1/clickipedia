@@ -180,7 +180,11 @@ pub fn download(options: &DownloadOptions) -> Result<()> {
     ensure!(options.jobs >= 1, "--jobs must be at least 1");
     fs::create_dir_all(&options.dumps_dir)
         .with_context(|| format!("creating {}", options.dumps_dir.display()))?;
-    let total: u64 = TABLES.iter().map(|t| options.lock.file(t).bytes).sum();
+    let mut pending: Vec<&SourceFile> = TABLES.iter().map(|t| options.lock.file(t)).collect();
+    if let Some(topics) = &options.lock.topics {
+        pending.push(&topics.source);
+    }
+    let total: u64 = pending.iter().map(|file| file.bytes).sum();
     eprintln!(
         "Downloading {} {} ({}) into {}",
         options.lock.wiki,
@@ -190,14 +194,14 @@ pub fn download(options: &DownloadOptions) -> Result<()> {
     );
 
     // Largest first so the longest transfer starts immediately.
-    let mut pending: Vec<&SourceFile> = TABLES.iter().map(|t| options.lock.file(t)).collect();
     pending.sort_by_key(|file| file.bytes);
+    let file_count = pending.len();
     let queue = Mutex::new(pending);
     let failures = Mutex::new(Vec::new());
     let agent = agent();
 
     thread::scope(|scope| {
-        for _ in 0..options.jobs.min(TABLES.len()) {
+        for _ in 0..options.jobs.min(file_count) {
             scope.spawn(|| loop {
                 let Some(source) = queue.lock().unwrap().pop() else {
                     return;
@@ -216,7 +220,7 @@ pub fn download(options: &DownloadOptions) -> Result<()> {
     if !failures.is_empty() {
         bail!("download failed:\n  {}", failures.join("\n  "));
     }
-    eprintln!("All four dump files are present and verified.");
+    eprintln!("All {file_count} locked input files are present and verified.");
     Ok(())
 }
 

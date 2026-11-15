@@ -71,7 +71,9 @@ repository lives in a synced folder.)
 
 The lock files in `sources/` are committed. A lock is what makes a build
 reproducible: the tool never reads Wikimedia's mutable `latest` path, and a
-download whose checksum differs from the lock is rejected.
+download whose checksum differs from the lock is rejected. A build also
+requires the separately pinned `topics` input described below; `resolve`
+intentionally does not guess a classification source.
 
 The publishing commands are Node scripts in `scripts/`:
 
@@ -92,6 +94,8 @@ snapshots/20261001/
   adjacency/index.bin               byte length and SHA-256 of every adjacency file
   metadata/000000.bin ...           page ID and title by article number
   metadata/index.bin
+  topics/000000.bin ...             one 64-bit topic mask per article number
+  topics/index.bin
   titles/000000.bin ...             title -> article number, in 4,096 hash buckets
   titles/index.bin
   reports/connectivity.json         reachability and component statistics
@@ -113,9 +117,60 @@ ordinal with one small download. Titles are compared after the normalization
 in `src/titles.rs`, which `src/wikiGraph/titles.js` in the game mirrors
 exactly; both are tested against `fixtures/title-cases.json`.
 
+Topic masks use the stable bit order in the repository-root
+`topic-catalog.json`. General is implicit and has no bit. An article can set
+any number of the 64 selectable leaf bits. The manifest repeats the catalog
+(ID, display label, bit, and article count), records the score threshold and
+model/source metadata, and reports how many articles have at least one bit.
+
+Classification input is a normalized, checksum-pinned JSONL file rather than
+being coupled to the full CirrusSearch document shape. Current partitioned
+exports live under `other/cirrus_search_index/<date>/index_name=enwiki_content/`.
+`scripts/normalize_topics.py` reads all downloaded `.json.bz2` partitions,
+extracts `classification.prediction.articletopic` weighted tags, sorts by page
+ID, and writes this exact format:
+
+```json
+{"pageId":123,"scores":[["computing",812345],["software",700000]]}
+```
+
+Scores are integer millionths. Topic IDs must exist in `topic-catalog.json`;
+duplicate IDs, unknown IDs, out-of-range scores, duplicate/unsorted page IDs,
+and a catalog hash mismatch are rejected. Rows for pages outside the graph
+are streamed past, and graph articles without a row receive mask zero. The
+source lock's `topics` object pins the file URL/name/byte length/SHA-1 plus:
+
+```json
+{
+  "format": "clickipedia-topic-scores-jsonl-v1",
+  "model": "articletopic",
+  "modelVersion": "<pinned upstream model/version>",
+  "thresholdMillionths": 500000,
+  "catalogSha256": "<SHA-256 of topic-catalog.json>"
+}
+```
+
+Download no more than three partitions concurrently (Wikimedia's published
+limit), then normalize them:
+
+```sh
+python3 tools/wiki-graph/scripts/normalize_topics.py \
+  tools/wiki-graph/data.nosync/dumps/enwiki/20261001/cirrus-20261018/*.json.bz2 \
+  --output tools/wiki-graph/data.nosync/dumps/enwiki/20261001/enwiki-20261001-topics.jsonl
+```
+
+The normalizer prints the output byte length, SHA-1, catalog SHA-256, and row
+counts for the source lock. A `derived://cirrus_search_index/...` URL records
+provenance for a normalized local artifact; it is not downloadable by the
+`download` command, so retain the partition files or the normalized JSONL.
+Changing source data, model version, threshold, catalog, or normalization
+requires a new lock and snapshot ID.
+
 The binary layouts are documented at the top of `src/format.rs` and decoded
 in the browser by `src/wikiGraph/codec.js`. Every integer is a little-endian
-`u32`. The manifest does not list every shard: it gives the hash of each
+`u32`, except each topic mask is one little-endian `u64`. A topic shard is
+`CKTM`, format version 1, first ordinal, count, then exactly `count` masks;
+its index kind is 4. The manifest does not list every shard: it gives the hash of each
 `index.bin`, and each index gives the length and hash of every shard, so the
 whole snapshot is pinned by the SHA-256 of `manifest.json`.
 
@@ -235,7 +290,9 @@ Wikimedia starts a new dump on the 1st and 20th of each month; a run takes
 several days to finish. The order below matters: nothing becomes visible to
 players until the last step, and each step checks the one before it.
 
-1. **Resolve.** Pin the new dump and commit the lock it writes.
+1. **Resolve and pin topics.** Pin the new SQL dump, normalize the matching
+   dated topic predictions as described above, add the locked `topics`
+   object, and commit the lock.
 
    ```sh
    npm run graph -- resolve --newest-complete

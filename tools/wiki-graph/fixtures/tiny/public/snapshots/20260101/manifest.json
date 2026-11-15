@@ -31,6 +31,12 @@
       "file": "tinywiki-20260101-pagelinks.sql",
       "bytes": 1331,
       "sha1": "4bc1d8de1ebb33780076934744ee2ac36fefaad9"
+    },
+    {
+      "table": "topics",
+      "file": "tinywiki-20260101-topics.jsonl",
+      "bytes": 513,
+      "sha1": "a2dc9eaefa1341e3f5a1d6649e3366cc66160f28"
     }
   ],
   "counts": {
@@ -63,6 +69,414 @@
       "bytes": 160,
       "sha256": "32e6e71fbaec91e9f2bc2b0b6e9f757dd91f6a2b1b379503a3a9f4084b115d7b"
     }
+  },
+  "topics": {
+    "dir": "topics",
+    "shardSize": 3,
+    "shardCount": 4,
+    "index": {
+      "path": "topics/index.bin",
+      "bytes": 160,
+      "sha256": "8515fcc6233a7a145382ce82c1b45d05960fdfb7fc55374171336eb775409d1f"
+    },
+    "catalog": [
+      {
+        "id": "biography",
+        "label": "Biography*",
+        "bit": 0,
+        "count": 1
+      },
+      {
+        "id": "women",
+        "label": "Women",
+        "bit": 1,
+        "count": 1
+      },
+      {
+        "id": "food-and-drink",
+        "label": "Food and drink",
+        "bit": 2,
+        "count": 0
+      },
+      {
+        "id": "internet-culture",
+        "label": "Internet culture",
+        "bit": 3,
+        "count": 0
+      },
+      {
+        "id": "linguistics",
+        "label": "Linguistics",
+        "bit": 4,
+        "count": 0
+      },
+      {
+        "id": "literature",
+        "label": "Literature",
+        "bit": 5,
+        "count": 1
+      },
+      {
+        "id": "media",
+        "label": "Media*",
+        "bit": 6,
+        "count": 0
+      },
+      {
+        "id": "books",
+        "label": "Books",
+        "bit": 7,
+        "count": 0
+      },
+      {
+        "id": "entertainment",
+        "label": "Entertainment",
+        "bit": 8,
+        "count": 0
+      },
+      {
+        "id": "films",
+        "label": "Films",
+        "bit": 9,
+        "count": 0
+      },
+      {
+        "id": "music",
+        "label": "Music",
+        "bit": 10,
+        "count": 0
+      },
+      {
+        "id": "radio",
+        "label": "Radio",
+        "bit": 11,
+        "count": 0
+      },
+      {
+        "id": "software",
+        "label": "Software",
+        "bit": 12,
+        "count": 0
+      },
+      {
+        "id": "television",
+        "label": "Television",
+        "bit": 13,
+        "count": 0
+      },
+      {
+        "id": "video-games",
+        "label": "Video games",
+        "bit": 14,
+        "count": 2
+      },
+      {
+        "id": "performing-arts",
+        "label": "Performing arts",
+        "bit": 15,
+        "count": 0
+      },
+      {
+        "id": "philosophy-and-religion",
+        "label": "Philosophy and religion",
+        "bit": 16,
+        "count": 0
+      },
+      {
+        "id": "sports",
+        "label": "Sports",
+        "bit": 17,
+        "count": 0
+      },
+      {
+        "id": "visual-arts",
+        "label": "Visual arts*",
+        "bit": 18,
+        "count": 0
+      },
+      {
+        "id": "architecture",
+        "label": "Architecture",
+        "bit": 19,
+        "count": 0
+      },
+      {
+        "id": "comics-and-anime",
+        "label": "Comics and Anime",
+        "bit": 20,
+        "count": 0
+      },
+      {
+        "id": "fashion",
+        "label": "Fashion",
+        "bit": 21,
+        "count": 0
+      },
+      {
+        "id": "geographical",
+        "label": "Geographical",
+        "bit": 22,
+        "count": 1
+      },
+      {
+        "id": "africa",
+        "label": "Africa*",
+        "bit": 23,
+        "count": 0
+      },
+      {
+        "id": "central-africa",
+        "label": "Central Africa",
+        "bit": 24,
+        "count": 0
+      },
+      {
+        "id": "eastern-africa",
+        "label": "Eastern Africa",
+        "bit": 25,
+        "count": 0
+      },
+      {
+        "id": "northern-africa",
+        "label": "Northern Africa",
+        "bit": 26,
+        "count": 0
+      },
+      {
+        "id": "southern-africa",
+        "label": "Southern Africa",
+        "bit": 27,
+        "count": 0
+      },
+      {
+        "id": "western-africa",
+        "label": "Western Africa",
+        "bit": 28,
+        "count": 0
+      },
+      {
+        "id": "central-america",
+        "label": "Central America",
+        "bit": 29,
+        "count": 0
+      },
+      {
+        "id": "north-america",
+        "label": "North America",
+        "bit": 30,
+        "count": 0
+      },
+      {
+        "id": "south-america",
+        "label": "South America",
+        "bit": 31,
+        "count": 0
+      },
+      {
+        "id": "asia",
+        "label": "Asia*",
+        "bit": 32,
+        "count": 0
+      },
+      {
+        "id": "central-asia",
+        "label": "Central Asia",
+        "bit": 33,
+        "count": 0
+      },
+      {
+        "id": "east-asia",
+        "label": "East Asia",
+        "bit": 34,
+        "count": 0
+      },
+      {
+        "id": "north-asia",
+        "label": "North Asia",
+        "bit": 35,
+        "count": 0
+      },
+      {
+        "id": "south-asia",
+        "label": "South Asia",
+        "bit": 36,
+        "count": 0
+      },
+      {
+        "id": "southeast-asia",
+        "label": "Southeast Asia",
+        "bit": 37,
+        "count": 0
+      },
+      {
+        "id": "west-asia",
+        "label": "West Asia",
+        "bit": 38,
+        "count": 0
+      },
+      {
+        "id": "europe",
+        "label": "Europe*",
+        "bit": 39,
+        "count": 0
+      },
+      {
+        "id": "eastern-europe",
+        "label": "Eastern Europe",
+        "bit": 40,
+        "count": 0
+      },
+      {
+        "id": "northern-europe",
+        "label": "Northern Europe",
+        "bit": 41,
+        "count": 0
+      },
+      {
+        "id": "southern-europe",
+        "label": "Southern Europe",
+        "bit": 42,
+        "count": 0
+      },
+      {
+        "id": "western-europe",
+        "label": "Western Europe",
+        "bit": 43,
+        "count": 0
+      },
+      {
+        "id": "oceania",
+        "label": "Oceania",
+        "bit": 44,
+        "count": 1
+      },
+      {
+        "id": "business-and-economics",
+        "label": "Business and economics",
+        "bit": 45,
+        "count": 0
+      },
+      {
+        "id": "education",
+        "label": "Education",
+        "bit": 46,
+        "count": 0
+      },
+      {
+        "id": "history",
+        "label": "History",
+        "bit": 47,
+        "count": 2
+      },
+      {
+        "id": "military-and-warfare",
+        "label": "Military and warfare",
+        "bit": 48,
+        "count": 0
+      },
+      {
+        "id": "politics-and-government",
+        "label": "Politics and government",
+        "bit": 49,
+        "count": 0
+      },
+      {
+        "id": "society",
+        "label": "Society",
+        "bit": 50,
+        "count": 0
+      },
+      {
+        "id": "transportation",
+        "label": "Transportation",
+        "bit": 51,
+        "count": 0
+      },
+      {
+        "id": "stem",
+        "label": "STEM*",
+        "bit": 52,
+        "count": 0
+      },
+      {
+        "id": "biology",
+        "label": "Biology",
+        "bit": 53,
+        "count": 0
+      },
+      {
+        "id": "chemistry",
+        "label": "Chemistry",
+        "bit": 54,
+        "count": 0
+      },
+      {
+        "id": "computing",
+        "label": "Computing",
+        "bit": 55,
+        "count": 2
+      },
+      {
+        "id": "earth-and-environment",
+        "label": "Earth and environment",
+        "bit": 56,
+        "count": 0
+      },
+      {
+        "id": "engineering",
+        "label": "Engineering",
+        "bit": 57,
+        "count": 0
+      },
+      {
+        "id": "libraries-and-information",
+        "label": "Libraries & Information",
+        "bit": 58,
+        "count": 0
+      },
+      {
+        "id": "mathematics",
+        "label": "Mathematics",
+        "bit": 59,
+        "count": 0
+      },
+      {
+        "id": "medicine-and-health",
+        "label": "Medicine & Health",
+        "bit": 60,
+        "count": 0
+      },
+      {
+        "id": "physics",
+        "label": "Physics",
+        "bit": 61,
+        "count": 0
+      },
+      {
+        "id": "space",
+        "label": "Space",
+        "bit": 62,
+        "count": 0
+      },
+      {
+        "id": "technology",
+        "label": "Technology",
+        "bit": 63,
+        "count": 2
+      }
+    ],
+    "threshold": {
+      "unit": "millionths",
+      "value": 600000,
+      "operator": ">="
+    },
+    "source": {
+      "format": "clickipedia-topic-scores-jsonl-v1",
+      "model": "fixture-articletopic",
+      "modelVersion": "1",
+      "catalogSha256": "ca13ce1b7f8f3454c5ca506c145e42eab4923a71e1cac4c7f662766425eb5e10"
+    },
+    "classifiedArticles": 9
   },
   "titles": {
     "dir": "titles",

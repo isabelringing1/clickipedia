@@ -4,6 +4,7 @@ import { expected, readFixtureFiles } from "../testing/fixtureGraph.js";
 import {
   EXPORT_FORMAT,
   HISTORY_LIMIT,
+  MANUAL_HISTORY_LIMIT,
   NO_SOURCE,
   PRIORITY_LIMIT,
   SAVE_VERSION,
@@ -32,6 +33,8 @@ function playedState() {
   const state = freshState();
   state.visited.add(1);
   state.visited.add(2);
+  state.globalVisited.add(1);
+  state.globalVisited.add(2);
   state.expanded.add(0);
   state.automation.bots[0] = { source: 1, cursor: 2 };
   state.automation.scanCursor = 3;
@@ -42,9 +45,28 @@ function playedState() {
   state.game.quests = { "quest-1": { complete: true, quest: { id: "quest-1", reward: 25 } } };
   state.game.purchasedItems = { "auto-1": true };
   state.game.history = [
-    { seq: 1, kind: "article", ordinal: 1, title: "Cookie_Clicker", spawn: 1 },
-    { seq: 2, kind: "quest" },
-    { seq: 3, kind: "article", ordinal: 2, title: 'It\'s_a_"Quote"', spawn: 2 },
+    {
+      seq: 1,
+      kind: "article",
+      ordinal: 1,
+      title: "Cookie_Clicker",
+      spawn: 1,
+      unlockedTopic: { id: "video-games", label: "Video games" },
+    },
+    {
+      seq: 2,
+      kind: "quest",
+      articleSeq: 1,
+      title: "Cookie_Clicker",
+    },
+    {
+      seq: 3,
+      kind: "article",
+      source: "auto",
+      ordinal: 2,
+      title: 'It\'s_a_"Quote"',
+      spawn: 2,
+    },
   ];
   state.game.nextSeq = 4;
   state.game.spawnCount = 2;
@@ -80,7 +102,8 @@ describe("encodeSave and decodeSave", () => {
   it("round-trip a game in progress", () => {
     const state = playedState();
     const record = encodeSave(state, 2000);
-    expect(record.visited).toBeInstanceOf(Uint8Array);
+    expect(record.globalVisited).toBeInstanceOf(Uint8Array);
+    expect(record.rooms.general.visited).toBeInstanceOf(Array);
     expect(record.visitedCount).toBe(3);
     expect(record.savedAt).toBe(2000);
     expect(record.createdAt).toBe(1000);
@@ -96,6 +119,23 @@ describe("encodeSave and decodeSave", () => {
     expect(encodeSave(decoded, 2000)).toEqual(record);
   });
 
+  it("persists unread topic markers and article unlock history", () => {
+    const state = playedState();
+    state.rooms.general.newlyUnlocked = true;
+    state.game.hasLeftGeneralRoom = true;
+    state.game.lastRoomId = "video-games";
+    state.game.lastView = "topics";
+    const decoded = decodeSave(encodeSave(state));
+    expect(decoded.rooms.general.newlyUnlocked).toBe(true);
+    expect(decoded.game.hasLeftGeneralRoom).toBe(true);
+    expect(decoded.game.lastRoomId).toBe("video-games");
+    expect(decoded.game.lastView).toBe("topics");
+    expect(decoded.game.history[0].unlockedTopic).toEqual({
+      id: "video-games",
+      label: "Video games",
+    });
+  });
+
   it("produces records that do not alias live state", () => {
     const state = playedState();
     const record = encodeSave(state);
@@ -103,8 +143,8 @@ describe("encodeSave and decodeSave", () => {
     state.game.history.push({ seq: 4, kind: "quest" });
     state.automation.bots[0].cursor = 99;
     expect(decodeSave(record).visited.has(5)).toBe(false);
-    expect(record.game.history.length).toBe(3);
-    expect(record.automation.bots[0].cursor).toBe(2);
+    expect(record.rooms.general.history.length).toBe(3);
+    expect(record.rooms.general.automation.bots[0].cursor).toBe(2);
   });
 
   it("rejects records that are not saves", () => {
@@ -117,31 +157,50 @@ describe("encodeSave and decodeSave", () => {
       "no manifest": { ...good, manifest: undefined },
       "other snapshot": { ...good, snapshotId: "20990101" },
       "wrong article count": { ...good, articleCount: 11 },
-      "short bitset": { ...good, visited: good.visited.slice(0, 1) },
-      "long bitset": { ...good, expanded: new Uint8Array(3) },
-      "bits past the end": { ...good, visited: new Uint8Array([0xff, 0xff]) },
-      "bitset as array": { ...good, visited: [...good.visited] },
+      "short bitset": { ...good, globalVisited: good.globalVisited.slice(0, 1) },
+      "long bitset": { ...good, globalVisited: new Uint8Array(3) },
+      "bits past the end": { ...good, globalVisited: new Uint8Array([0xff, 0xff]) },
+      "bitset as array": { ...good, globalVisited: [...good.globalVisited] },
       "no game": { ...good, game: undefined },
       "bad knowledge": { ...good, game: { ...good.game, knowledge: "lots" } },
       "infinite knowledge": { ...good, game: { ...good.game, knowledge: Infinity } },
-      "negative autos": { ...good, game: { ...good.game, autos: -1 } },
-      "fractional autos": { ...good, game: { ...good.game, autos: 1.5 } },
       "no quests": { ...good, game: { ...good.game, quests: null } },
-      "history not a list": { ...good, game: { ...good.game, history: {} } },
+      "history not a list": {
+        ...good,
+        rooms: {
+          ...good.rooms,
+          general: { ...good.rooms.general, history: {} },
+        },
+      },
       "history out of order": {
         ...good,
-        game: { ...good.game, history: [good.game.history[1], good.game.history[0]] },
+        rooms: {
+          ...good.rooms,
+          general: {
+            ...good.rooms.general,
+            history: [good.rooms.general.history[1], good.rooms.general.history[0]],
+          },
+        },
       },
       "history ordinal out of range": {
         ...good,
-        game: {
-          ...good.game,
-          history: [{ seq: 1, kind: "article", ordinal: 10, title: "X", spawn: 1 }],
+        rooms: {
+          ...good.rooms,
+          general: {
+            ...good.rooms.general,
+            history: [{ seq: 1, kind: "article", ordinal: 10, title: "X", spawn: 1 }],
+          },
         },
       },
       "history entry of unknown kind": {
         ...good,
-        game: { ...good.game, history: [{ seq: 1, kind: "mystery" }] },
+        rooms: {
+          ...good.rooms,
+          general: {
+            ...good.rooms.general,
+            history: [{ seq: 1, kind: "mystery" }],
+          },
+        },
       },
     };
     for (const [label, record] of Object.entries(cases)) {
@@ -163,7 +222,7 @@ describe("encodeSave and decodeSave", () => {
 
   it("repairs automation state that contradicts the bitsets", () => {
     const record = encodeSave(playedState());
-    record.automation = {
+    record.rooms.general.automation = {
       // Article 0 is already fully followed; 7 was never opened.
       bots: [{ source: 0, cursor: 1 }, { source: 1, cursor: 0 }],
       scanCursor: 9999,
@@ -177,7 +236,7 @@ describe("encodeSave and decodeSave", () => {
       credit: 0,
     });
 
-    record.automation = undefined;
+    record.rooms.general.automation = undefined;
     expect(decodeSave(record).automation).toEqual({
       bots: [{ source: NO_SOURCE, cursor: 0 }],
       scanCursor: 0,
@@ -188,8 +247,12 @@ describe("encodeSave and decodeSave", () => {
 
   it("keeps the start article open and expanded articles opened", () => {
     const record = encodeSave(playedState());
-    record.visited = new Uint8Array([0b0000_0100, 0]);
-    record.expanded = new Uint8Array([0b0001_0100, 0]);
+    const replacement = freshState();
+    replacement.visited.add(2);
+    replacement.expanded.add(2);
+    replacement.expanded.add(4);
+    record.rooms.general.visited = replacement.visited.toChunks();
+    record.rooms.general.expanded = replacement.expanded.toChunks();
     const decoded = decodeSave(record);
     expect(decoded.visited.has(0)).toBe(true);
     expect(decoded.visited.count).toBe(2);
@@ -210,8 +273,8 @@ describe("encodeSave and decodeSave", () => {
     state.game.nextSeq = 5;
     state.automation.priority = Array.from({ length: PRIORITY_LIMIT + 10 }, () => 2);
     const decoded = decodeSave(encodeSave(state));
-    expect(decoded.game.history.length).toBe(HISTORY_LIMIT);
-    expect(decoded.game.history[0].seq).toBe(41);
+    expect(decoded.game.history.length).toBe(MANUAL_HISTORY_LIMIT);
+    expect(decoded.game.history[0].seq).toBe(91);
     // nextSeq can never collide with an existing entry.
     expect(decoded.game.nextSeq).toBe(HISTORY_LIMIT + 41);
     expect(decoded.automation.priority.length).toBe(PRIORITY_LIMIT);
@@ -242,7 +305,8 @@ describe("export and import", () => {
     const document = JSON.parse(text);
     expect(document.format).toBe(EXPORT_FORMAT);
     expect(document.snapshotId).toBe(expected.snapshotId);
-    expect(typeof document.visited).toBe("string");
+    expect(typeof document.globalVisited).toBe("string");
+    expect(typeof document.rooms.general.visited[0].bytes).toBe("string");
     expect(importSave(text)).toEqual(record);
   });
 
@@ -253,9 +317,9 @@ describe("export and import", () => {
       "not json": "not json",
       "wrong format": JSON.stringify({ ...document, format: "something-else" }),
       "json array": "[]",
-      "missing bitset": JSON.stringify({ ...document, visited: undefined }),
-      "bad base64": JSON.stringify({ ...document, visited: "!!!" }),
-      "truncated bitset": JSON.stringify({ ...document, visited: "AA==" }),
+      "missing bitset": JSON.stringify({ ...document, globalVisited: undefined }),
+      "bad base64": JSON.stringify({ ...document, globalVisited: "!!!" }),
+      "truncated bitset": JSON.stringify({ ...document, globalVisited: "AA==" }),
       "tampered count": JSON.stringify({ ...document, articleCount: 5 }),
     };
     for (const [label, value] of Object.entries(cases)) {

@@ -15,6 +15,9 @@
 //!                  title_offsets[count + 1]      byte offsets into `titles`
 //!                  titles                        UTF-8, database-key form
 //!
+//! topic mask shard "CKTM" version first_ordinal count
+//!                  masks[count]                  little-endian u64, catalog bit order
+//!
 //! title bucket     "CKTB" version bucket count
 //!                  ordinals[count]
 //!                  title_offsets[count + 1]
@@ -31,6 +34,7 @@ pub const FORMAT_VERSION: u32 = 1;
 
 pub const MAGIC_ADJACENCY: [u8; 4] = *b"CKAJ";
 pub const MAGIC_METADATA: [u8; 4] = *b"CKMD";
+pub const MAGIC_TOPICS: [u8; 4] = *b"CKTM";
 pub const MAGIC_TITLES: [u8; 4] = *b"CKTB";
 pub const MAGIC_INDEX: [u8; 4] = *b"CKIX";
 
@@ -39,12 +43,14 @@ pub const INDEX_ENTRY_BYTES: usize = 36;
 
 pub const DIR_ADJACENCY: &str = "adjacency";
 pub const DIR_METADATA: &str = "metadata";
+pub const DIR_TOPICS: &str = "topics";
 pub const DIR_TITLES: &str = "titles";
 pub const INDEX_FILE: &str = "index.bin";
 
 pub const KIND_ADJACENCY: u32 = 1;
 pub const KIND_METADATA: u32 = 2;
 pub const KIND_TITLES: u32 = 3;
+pub const KIND_TOPICS: u32 = 4;
 
 pub const TITLE_FLAG_REDIRECT: u8 = 1;
 
@@ -63,6 +69,13 @@ fn push_u32(out: &mut Vec<u8>, value: u32) {
 
 fn push_u32_slice(out: &mut Vec<u8>, values: &[u32]) {
     out.reserve(values.len() * 4);
+    for &value in values {
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+}
+
+fn push_u64_slice(out: &mut Vec<u8>, values: &[u64]) {
+    out.reserve(values.len() * 8);
     for &value in values {
         out.extend_from_slice(&value.to_le_bytes());
     }
@@ -157,7 +170,10 @@ impl AdjacencyShard {
         ensure!(bytes.len() >= offsets_end, "{what}: truncated offsets");
         let offsets = read_u32_slice(bytes, HEADER_BYTES, count + 1);
         let payload = bytes.len() - offsets_end;
-        ensure!(payload % 4 == 0, "{what}: target bytes are not a multiple of 4");
+        ensure!(
+            payload % 4 == 0,
+            "{what}: target bytes are not a multiple of 4"
+        );
         check_offsets(&offsets, payload / 4, what)?;
         let targets = read_u32_slice(bytes, offsets_end, payload / 4);
         Ok(AdjacencyShard {
@@ -219,6 +235,45 @@ impl MetadataShard {
             page_ids,
             title_offsets,
             titles,
+        })
+    }
+}
+
+/// Topic memberships for a contiguous range of article ordinals.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TopicMaskShard {
+    pub first_ordinal: u32,
+    pub masks: Vec<u64>,
+}
+
+impl TopicMaskShard {
+    pub fn count(&self) -> u32 {
+        self.masks.len() as u32
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(HEADER_BYTES + self.masks.len() * 8);
+        write_header(&mut out, MAGIC_TOPICS, self.first_ordinal, self.count());
+        push_u64_slice(&mut out, &self.masks);
+        out
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<Self> {
+        let what = "topic mask shard";
+        let (first_ordinal, count) = read_header(bytes, MAGIC_TOPICS, what)?;
+        let expected = HEADER_BYTES as u64 + count as u64 * 8;
+        ensure!(
+            bytes.len() as u64 == expected,
+            "{what}: expected {expected} bytes, found {}",
+            bytes.len()
+        );
+        let masks = bytes[HEADER_BYTES..]
+            .chunks_exact(8)
+            .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
+            .collect();
+        Ok(TopicMaskShard {
+            first_ordinal,
+            masks,
         })
     }
 }
@@ -427,6 +482,19 @@ mod tests {
     }
 
     #[test]
+    fn topic_masks_round_trip_and_preserve_high_bit() {
+        let shard = TopicMaskShard {
+            first_ordinal: 12,
+            masks: vec![0, 3, 1u64 << 63],
+        };
+        let bytes = shard.encode();
+        assert_eq!(&bytes[..4], b"CKTM");
+        assert_eq!(bytes.len(), 16 + 3 * 8);
+        assert_eq!(TopicMaskShard::decode(&bytes).unwrap(), shard);
+        assert!(TopicMaskShard::decode(&bytes[..bytes.len() - 1]).is_err());
+    }
+
+    #[test]
     fn title_bucket_round_trip_and_lookup() {
         let bucket = TitleBucket {
             bucket: 2,
@@ -497,5 +565,6 @@ mod tests {
     fn shard_paths_are_zero_padded() {
         assert_eq!(shard_path(DIR_ADJACENCY, 42), "adjacency/000042.bin");
         assert_eq!(index_path(DIR_TITLES), "titles/index.bin");
+        assert_eq!(shard_path(DIR_TOPICS, 7), "topics/000007.bin");
     }
 }
