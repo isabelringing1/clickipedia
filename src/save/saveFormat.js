@@ -77,6 +77,7 @@ export function createRoomState({
     purchasedItems: {},
     history: [],
     historyDroppedCount: 0,
+    hasAutoActivity: false,
     nextSeq: 1,
     spawnCount: 0,
     blocked: false,
@@ -126,7 +127,9 @@ export function createSave({ manifest, manifestSha256, now = Date.now() }) {
     game: {
       knowledge: 1,
       quests: {},
+      doorHintPurchased: false,
       hasLeftGeneralRoom: false,
+      doorUnlocked: false,
       lastRoomId: "general",
       lastView: "articles",
     },
@@ -162,6 +165,7 @@ export function encodeSave(state, now = Date.now()) {
             : {}),
         })),
         historyDroppedCount: room.historyDroppedCount,
+        hasAutoActivity: room.hasAutoActivity,
         nextSeq: room.nextSeq,
         spawnCount: room.spawnCount,
         blocked: room.blocked,
@@ -183,7 +187,9 @@ export function encodeSave(state, now = Date.now()) {
     game: {
       knowledge: state.game.knowledge,
       quests: state.game.quests,
+      doorHintPurchased: state.game.doorHintPurchased === true,
       hasLeftGeneralRoom: state.game.hasLeftGeneralRoom === true,
+      doorUnlocked: state.game.doorUnlocked === true,
       lastRoomId:
         typeof state.game.lastRoomId === "string"
           ? state.game.lastRoomId
@@ -204,16 +210,31 @@ function decodeHistory(value, articleCount) {
       throw invalid("its history is out of order");
     }
     lastSeq = entry.seq;
-    if (entry.kind === "quest") {
+    if (entry.kind === "quest" || entry.kind === "door") {
       history.push({
         seq: entry.seq,
-        kind: "quest",
+        kind: entry.kind,
         ...(typeof entry.title === "string" && entry.title !== ""
           ? { title: entry.title }
           : {}),
         ...(Number.isInteger(entry.articleSeq) && entry.articleSeq >= 0
           ? { articleSeq: entry.articleSeq }
           : {}),
+      });
+    } else if (
+      entry.kind === "reopen" &&
+      Number.isInteger(entry.articleSeq) &&
+      entry.articleSeq >= 0 &&
+      isOrdinal(entry.ordinal, articleCount) &&
+      typeof entry.title === "string" &&
+      entry.title !== ""
+    ) {
+      history.push({
+        seq: entry.seq,
+        kind: "reopen",
+        articleSeq: entry.articleSeq,
+        ordinal: entry.ordinal,
+        title: entry.title,
       });
     } else if (
       entry.kind === "article" &&
@@ -238,6 +259,7 @@ function decodeHistory(value, articleCount) {
         title: entry.title,
         spawn: Number.isInteger(entry.spawn) && entry.spawn > 0 ? entry.spawn : 1,
         ...(entry.source === "auto" ? { source: "auto" } : {}),
+        ...(entry.alreadyOpened === true ? { alreadyOpened: true } : {}),
         ...(unlockedTopic ? { unlockedTopic } : {}),
       });
     } else {
@@ -252,7 +274,9 @@ function decodeHistory(value, articleCount) {
   );
   for (const entry of history) {
     if (
-      entry.kind === "quest" &&
+      (entry.kind === "quest" ||
+        entry.kind === "door" ||
+        entry.kind === "reopen") &&
       protectedManual.has(entry.seq) &&
       Number.isInteger(entry.articleSeq)
     ) {
@@ -298,7 +322,10 @@ function decodeGame(value) {
   return {
     knowledge: value.knowledge,
     quests: value.quests,
+    doorHintPurchased: value.doorHintPurchased === true,
     hasLeftGeneralRoom: value.hasLeftGeneralRoom === true,
+    doorUnlocked:
+      value.doorUnlocked === true || value.hasLeftGeneralRoom === true,
     lastRoomId:
       typeof value.lastRoomId === "string" ? value.lastRoomId : "general",
     lastView: value.lastView === "topics" ? "topics" : "articles",
@@ -381,6 +408,9 @@ function decodeRoom(value, articleCount) {
       Number.isInteger(value.historyDroppedCount) && value.historyDroppedCount >= 0
         ? value.historyDroppedCount + decodedHistory.dropped
         : decodedHistory.dropped,
+    hasAutoActivity:
+      value.hasAutoActivity === true ||
+      history.some((entry) => entry.source === "auto"),
     nextSeq: Math.max(Number.isInteger(value.nextSeq) ? value.nextSeq : 1, lastSeq + 1),
     spawnCount:
       Number.isInteger(value.spawnCount) && value.spawnCount >= 0 ? value.spawnCount : 0,

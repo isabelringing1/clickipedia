@@ -55,6 +55,14 @@ describe("a fresh save", () => {
     expect(record.visitedCount).toBe(1);
   });
 
+  it("remembers when a room has produced Auto activity", async () => {
+    const session = await load();
+    expect(session.room("general").hasAutoActivity).toBe(false);
+    session.recordAutomatedOpen("general", 1);
+    expect(session.room("general").hasAutoActivity).toBe(true);
+    expect((await reload(session)).room("general").hasAutoActivity).toBe(true);
+  });
+
   it("cannot start without the graph, and leaves no save behind", async () => {
     bucket.offline = true;
     const error = await load({ retries: 1 }).catch((caught) => caught);
@@ -122,6 +130,18 @@ describe("snapshot pinning", () => {
 });
 
 describe("reloading", () => {
+  it("keeps the door hint after the current game is erased", async () => {
+    const first = await load();
+    first.game.doorHintPurchased = true;
+    await first.rememberDoorHintPurchase();
+    await first.store.clear();
+    first.store.close();
+
+    const second = await load();
+    expect(second.isNew).toBe(true);
+    expect(second.game.doorHintPurchased).toBe(true);
+  });
+
   it("restores progress exactly", async () => {
     const first = await load();
     await first.openLink("cookie Clicker", 0);
@@ -180,8 +200,42 @@ describe("reloading", () => {
 });
 
 describe("opening links", () => {
+  it("does not unlock topic rooms before Door is found", async () => {
+    const session = await load();
+    const opened = await session.openLink("general", "Cookie Clicker", 0);
+    expect(opened.unlocked).toEqual([]);
+    expect(Object.keys(session.rooms)).toEqual(["general"]);
+  });
+
+  it("unlocks Architecture specifically when Door is found", async () => {
+    const session = await load();
+    const resolveTitle = session.graph.resolveTitle.bind(session.graph);
+    session.graph.resolveTitle = async (title) =>
+      title === "Door"
+        ? { ordinal: 2, isRedirect: false, title: "Door" }
+        : resolveTitle(title);
+    const topicIndex = (id) =>
+      topicCatalog.topics.findIndex((topic) => topic.id === id);
+    session.graph.getTopicMask = async () =>
+      (1n << BigInt(topicIndex("visual-arts"))) |
+      (1n << BigInt(topicIndex("architecture")));
+
+    const opened = await session.openLink("general", "Door", 0);
+
+    expect(opened.unlocked).toEqual(["architecture"]);
+    expect(session.rooms["visual-arts"]).toBeUndefined();
+    expect(session.rooms.architecture).toMatchObject({
+      id: "architecture",
+      label: "Architecture",
+      topicIndex: topicIndex("architecture"),
+      root: { ordinal: 2, title: "Door" },
+      newlyUnlocked: true,
+    });
+  });
+
   it("unlocks a matching topic room and keeps room progress independent", async () => {
     const session = await load();
+    session.game.doorUnlocked = true;
     expect(Object.keys(session.rooms)).toEqual(["general"]);
 
     const opened = await session.openLink("general", "Cookie Clicker", 0);
@@ -208,6 +262,7 @@ describe("opening links", () => {
 
   it("unlocks at most one topic per globally new article", async () => {
     const session = await load();
+    session.game.doorUnlocked = true;
     const topicIndex = (id) =>
       topicCatalog.topics.findIndex((topic) => topic.id === id);
     const mask =

@@ -11,6 +11,7 @@ export const DB_NAME = "clickipedia";
 export const DB_VERSION = 1;
 const STORE = "saves";
 const CURRENT = "current";
+const PROFILE = "profile";
 
 function requestToPromise(request) {
   return new Promise((resolve, reject) => {
@@ -69,6 +70,21 @@ export class PlayerStore {
     await done;
   }
 
+  async loadProfile() {
+    const transaction = this.database.transaction(STORE, "readonly");
+    const profile = await requestToPromise(
+      transaction.objectStore(STORE).get(PROFILE),
+    );
+    return profile ?? {};
+  }
+
+  async writeProfile(profile) {
+    const transaction = this.database.transaction(STORE, "readwrite");
+    const done = transactionDone(transaction);
+    transaction.objectStore(STORE).put(profile, PROFILE);
+    await done;
+  }
+
   async clear() {
     const transaction = this.database.transaction(STORE, "readwrite");
     const done = transactionDone(transaction);
@@ -86,6 +102,7 @@ export class PlayerStore {
 export class MemoryStore {
   constructor() {
     this.record = null;
+    this.profile = {};
     this.persistent = false;
   }
 
@@ -95,6 +112,14 @@ export class MemoryStore {
 
   async write(record) {
     this.record = structuredClone(record);
+  }
+
+  async loadProfile() {
+    return structuredClone(this.profile);
+  }
+
+  async writeProfile(profile) {
+    this.profile = structuredClone(profile);
   }
 
   async clear() {

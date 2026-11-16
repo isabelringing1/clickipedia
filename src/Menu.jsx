@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Log from "./Log";
-import { AutomationStatus } from "./Progress";
+import Progress, { AutomationStatus } from "./Progress";
 import Quests from "./Quests";
 import Shop from "./Shop";
 import ScrollRegion from "./ScrollRegion";
@@ -9,32 +9,40 @@ function Menu(props) {
   const {
     history,
     historyDroppedCount,
+    hasAutoActivity,
+    doorUnlocked,
     rootEntry,
     quests,
+    knowledge,
+    doorHintPurchased,
+    purchaseDoorHint,
     anyBlocked,
     resurfaceArticle,
     leaveRoom,
   } = props;
   const [showAutos, setShowAutos] = useState(false);
-  const hasOpenQuest = Object.values(quests).some((quest) => !quest.complete);
 
   return (
     <div id="menu">
-      <button className="leave-room" type="button" onClick={leaveRoom}>
-        <span aria-hidden="true">&lt;</span> Leave Room
-        {anyBlocked && <span className="room-warning"> !</span>}
-      </button>
+      {doorUnlocked && (
+        <button className="leave-room" type="button" onClick={leaveRoom}>
+          <span aria-hidden="true">&lt;</span> Leave Room
+          {anyBlocked && <span className="room-warning"> !</span>}
+        </button>
+      )}
       <section className="menu-panel history-panel">
         <div className="history-heading">
           <h2>History</h2>
-          <label className="history-autos-toggle">
-            <input
-              type="checkbox"
-              checked={showAutos}
-              onChange={(event) => setShowAutos(event.target.checked)}
-            />
-            Show Autos
-          </label>
+          {hasAutoActivity && (
+            <label className="history-autos-toggle">
+              <input
+                type="checkbox"
+                checked={showAutos}
+                onChange={(event) => setShowAutos(event.target.checked)}
+              />
+              Show Autos
+            </label>
+          )}
         </div>
         <ScrollRegion className="history-scroll-region">
           <Log
@@ -47,12 +55,12 @@ function Menu(props) {
         </ScrollRegion>
       </section>
 
-      {hasOpenQuest && (
-        <section className="menu-panel quests-panel">
-          <h2>Quests</h2>
-          <Quests quests={quests} />
-        </section>
-      )}
+      <Quests
+        quests={quests}
+        knowledge={knowledge}
+        doorHintPurchased={doorHintPurchased}
+        purchaseDoorHint={purchaseDoorHint}
+      />
     </div>
   );
 }
@@ -60,6 +68,8 @@ function Menu(props) {
 export function SharedMenu(props) {
   const {
     knowledge,
+    visitedCount,
+    articleCount,
     autos,
     automationStatus,
     setKnowledge,
@@ -71,23 +81,38 @@ export function SharedMenu(props) {
   } = props;
 
   return (
-    <aside className="shared-menu" hidden={hidden}>
-      {autos > 0 && (
-        <section className="menu-panel auto-panel">
-          <AutomationStatus
-            autos={autos}
-            automationStatus={automationStatus}
+    <aside className={`shared-menu${hidden ? " room-closed" : ""}`}>
+      <section
+        className="menu-panel global-stats-panel"
+        aria-label="Global game statistics"
+      >
+        <Progress
+          visitedCount={visitedCount}
+          articleCount={articleCount}
+          knowledge={knowledge}
+          hideBar
+        />
+      </section>
+      {!hidden && (
+        <>
+          {autos > 0 && (
+            <section className="menu-panel auto-panel">
+              <AutomationStatus
+                autos={autos}
+                automationStatus={automationStatus}
+              />
+            </section>
+          )}
+          <Shop
+            knowledge={knowledge}
+            setKnowledge={setKnowledge}
+            setAutos={setAutos}
+            setInfo={setInfo}
+            purchasedItems={purchasedItems}
+            setPurchasedItems={setPurchasedItems}
           />
-        </section>
+        </>
       )}
-      <Shop
-        knowledge={knowledge}
-        setKnowledge={setKnowledge}
-        setAutos={setAutos}
-        setInfo={setInfo}
-        purchasedItems={purchasedItems}
-        setPurchasedItems={setPurchasedItems}
-      />
     </aside>
   );
 }

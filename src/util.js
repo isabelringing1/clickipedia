@@ -6,10 +6,12 @@ const MAX_CONCURRENT_REQUESTS = 3;
 const REQUEST_START_INTERVAL_MS = 350;
 const MAX_RETRIES = 4;
 const MAX_ARTICLE_CACHE_ENTRIES = 50;
+const MAX_PREVIEW_CACHE_ENTRIES = 100;
 const CATEGORY_PREFIX = "./Category:";
 
 const requestQueue = [];
 const articleContentCache = new Map();
+const articlePreviewCache = new Map();
 let activeRequests = 0;
 let nextRequestAt = 0;
 let blockedUntil = 0;
@@ -96,6 +98,10 @@ function articleUrl(topic) {
   return `https://en.wikipedia.org/api/rest_v1/page/html/${encodeURIComponent(topic)}`;
 }
 
+function articlePreviewUrl(topic) {
+  return `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`;
+}
+
 // Turns the href of a category marker in article HTML, such as
 // "./Category:Countries_in_East_Asia#Japan", into the category's name
 // ("Countries in East Asia"). Returns null for anything else.
@@ -127,9 +133,8 @@ function extractCategories(doc) {
   return [...categories];
 }
 
-// Loads an article for the player to read. This is the only request the game
-// makes to Wikipedia: which links exist, and which articles automation opens,
-// come from the published link graph instead.
+// Loads an article for the player to read. Which links exist, and which
+// articles automation opens, come from the published link graph instead.
 async function fetchWikiPage(topic) {
   const url = articleUrl(topic);
 
@@ -164,8 +169,42 @@ async function fetchWikiPage(topic) {
   }
 }
 
+async function fetchWikiPreview(topic) {
+  const url = articlePreviewUrl(topic);
+  let request = articlePreviewCache.get(url);
+  if (request) {
+    articlePreviewCache.delete(url);
+    articlePreviewCache.set(url, request);
+    return request;
+  }
+
+  request = fetchWithPolicy(url)
+    .then((response) => response.json())
+    .then((page) => ({
+      title: page.title ?? formatTopic(topic),
+      extract: page.extract ?? page.description ?? "",
+      thumbnail: page.thumbnail?.source ?? null,
+    }))
+    .catch((error) => {
+      articlePreviewCache.delete(url);
+      console.error("Failed to load page preview:", error);
+      return null;
+    });
+  articlePreviewCache.set(url, request);
+  while (articlePreviewCache.size > MAX_PREVIEW_CACHE_ENTRIES) {
+    articlePreviewCache.delete(articlePreviewCache.keys().next().value);
+  }
+  return request;
+}
+
 function evictWikiPage(topic) {
   articleContentCache.delete(articleUrl(topic));
 }
 
-export { formatTopic, fetchWikiPage, evictWikiPage, categoryFromHref };
+export {
+  formatTopic,
+  fetchWikiPage,
+  fetchWikiPreview,
+  evictWikiPage,
+  categoryFromHref,
+};

@@ -22,7 +22,6 @@
   "dependencies": {
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-resizable": "^3.0.5",
     "spinners-react": "^1.0.11",
     "use-sound": "^5.0.0"
   },

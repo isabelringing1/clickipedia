@@ -34,7 +34,7 @@ function Progress(props) {
         id="knowledge-tween"
         className={delta == 0 ? "" : delta > 0 ? "float-up" : "float-up negative"}
       >
-        {delta > 0 ? "+" : "-"} {delta}
+        {delta > 0 ? `+${delta}` : delta}
       </div>
       <div className="progress-stat-row">
         <span>{knowledgeLabel}</span>

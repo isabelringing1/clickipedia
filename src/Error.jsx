@@ -9,11 +9,12 @@ function Error(props) {
       return;
     }
     setCn("error-div error-in");
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       setCn("error-div");
       setMessage("");
     }, 700);
-  }, [message]);
+    return () => clearTimeout(timeout);
+  }, [message, setMessage]);
 
   return (
     <div className="error-container">

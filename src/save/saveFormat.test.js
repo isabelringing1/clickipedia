@@ -51,6 +51,7 @@ function playedState() {
       ordinal: 1,
       title: "Cookie_Clicker",
       spawn: 1,
+      alreadyOpened: true,
       unlockedTopic: { id: "video-games", label: "Video games" },
     },
     {
@@ -70,6 +71,7 @@ function playedState() {
   ];
   state.game.nextSeq = 4;
   state.game.spawnCount = 2;
+  state.rooms.general.hasAutoActivity = true;
   return state;
 }
 
@@ -122,18 +124,52 @@ describe("encodeSave and decodeSave", () => {
   it("persists unread topic markers and article unlock history", () => {
     const state = playedState();
     state.rooms.general.newlyUnlocked = true;
+    state.rooms.general.hasAutoActivity = true;
     state.game.hasLeftGeneralRoom = true;
+    state.game.doorUnlocked = true;
+    state.game.doorHintPurchased = true;
     state.game.lastRoomId = "video-games";
     state.game.lastView = "topics";
+    state.game.history.push({
+      seq: 4,
+      kind: "door",
+      articleSeq: 3,
+      title: "Door",
+    });
+    state.game.history.push({
+      seq: 5,
+      kind: "reopen",
+      articleSeq: 3,
+      ordinal: 2,
+      title: 'It\'s_a_"Quote"',
+    });
+    state.game.nextSeq = 6;
     const decoded = decodeSave(encodeSave(state));
     expect(decoded.rooms.general.newlyUnlocked).toBe(true);
+    expect(decoded.rooms.general.hasAutoActivity).toBe(true);
     expect(decoded.game.hasLeftGeneralRoom).toBe(true);
+    expect(decoded.game.doorUnlocked).toBe(true);
+    expect(decoded.game.doorHintPurchased).toBe(true);
     expect(decoded.game.lastRoomId).toBe("video-games");
     expect(decoded.game.lastView).toBe("topics");
+    expect(decoded.game.history.at(-2)).toEqual({
+      seq: 4,
+      kind: "door",
+      articleSeq: 3,
+      title: "Door",
+    });
+    expect(decoded.game.history.at(-1)).toEqual({
+      seq: 5,
+      kind: "reopen",
+      articleSeq: 3,
+      ordinal: 2,
+      title: 'It\'s_a_"Quote"',
+    });
     expect(decoded.game.history[0].unlockedTopic).toEqual({
       id: "video-games",
       label: "Video games",
     });
+    expect(decoded.game.history[0].alreadyOpened).toBe(true);
   });
 
   it("produces records that do not alias live state", () => {

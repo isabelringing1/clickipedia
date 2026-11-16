@@ -49,6 +49,11 @@ body {
   border-left: 10px solid #a2a9b1;
 }
 
+.article-content .ambox,
+.article-content .multiple-issues {
+  display: none !important;
+}
+
 .mbox-image {
   border: none;
   padding: 2px 0 2px 0.5em;
@@ -579,6 +584,9 @@ h6 {
 /* @noflip */
 div.floatright,
 table.floatright {
+  float: right;
+  clear: right;
+  max-width: 100%;
   margin: 0 0 0.5em 0.5em;
   border: 0;
 }
@@ -588,6 +596,9 @@ div.floatright p {
 /* @noflip */
 div.floatleft,
 table.floatleft {
+  float: left;
+  clear: left;
+  max-width: 100%;
   margin: 0 0.5em 0.5em 0;
   border: 0;
 }
@@ -601,25 +612,35 @@ div.thumb {
   width: auto;
 }
 div.thumbinner {
+  box-sizing: border-box;
+  max-width: 100%;
   border: 1px solid #ccc;
-  padding: 3px !important;
+  padding: 6px !important;
   background-color: #f9f9f9;
-  font-size: 94%;
+  font-size: 14px;
+  line-height: 1.4;
   text-align: center;
   overflow: hidden;
 }
 html .thumbimage {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
   border: 1px solid #ccc;
 }
 html .thumbcaption {
+  box-sizing: border-box;
+  overflow: auto;
   border: none;
   text-align: left;
-  line-height: 1.4em;
-  padding: 3px !important;
-  font-size: 94%;
+  line-height: 1.4;
+  padding: 7px 3px 3px !important;
+  font-size: 14px;
 }
 div.magnify {
   float: right;
+  margin: 2px 0 0 8px;
   border: none !important;
   background: none !important;
 }
@@ -631,10 +652,14 @@ div.magnify img {
 }
 /* @noflip */
 div.tright {
+  float: right;
+  clear: right;
   margin: 0.5em 0 0.8em 1.4em;
 }
 /* @noflip */
 div.tleft {
+  float: left;
+  clear: left;
   margin: 0.5em 1.4em 0.8em 0;
 }
 img.thumbborder {
@@ -1423,12 +1448,76 @@ span.texhtml span.texhtml {
   }
 }
 
+ul.gallery {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  margin: 2px auto;
+  padding: 2px;
+  list-style: none;
+  line-height: 1.4;
+}
+
+ul.gallery.center {
+  justify-content: center;
+}
+
+li.gallerycaption {
+  flex: 0 0 100%;
+  margin: 0 0 4px;
+  padding: 0;
+  font-weight: bold;
+  text-align: center;
+}
+
+li.gallerybox {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  margin: 2px;
+  padding: 0;
+  text-align: center;
+  vertical-align: top;
+}
+
+.gallerybox > .thumb {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  border: 1px solid #c8ccd1;
+  background: #f8f9fa;
+}
+
+.gallerybox > .thumb img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 100%;
+  margin: auto;
+}
+
+.gallerybox .gallerytext {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 8px 4px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+}
+
 /*
  * Put anything you mean to be a sitewide addition above the TemplateStyles
  * comment above.
  */
 
 figure {
+  box-sizing: border-box;
   clear: right;
   display: table;
   float: right;
@@ -1437,11 +1526,11 @@ figure {
   margin-right: 0px;
   margin-top: 3.675px;
   min-width: 100px;
-  width: 359px;
+  width: min(359px, 100%);
   direction: ltr;
   font-family: sans-serif;
-  font-size: 7.35px;
-  line-height: 0px;
+  font-size: 14px;
+  line-height: 1.4;
   text-align: center;
   color: rgb(32, 33, 34);
   background-color: rgb(248, 249, 250);
@@ -1472,21 +1561,42 @@ figure {
   user-select: none;
 }
 
-@media (max-width: 1200px) {
+figure > a {
+  display: block;
+  line-height: 0;
+}
+
+figure img {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 600px) {
   figure {
     margin: 0 auto !important;
     float: none !important;
+  }
+
+  div.floatright,
+  div.floatleft,
+  div.tright,
+  div.tleft {
+    float: none;
+    margin-right: auto;
+    margin-left: auto;
   }
 }
 
 figcaption {
   display: table-caption;
-  height: 39.6094px;
+  box-sizing: border-box;
+  height: auto;
+  min-height: 39.6094px;
   padding-bottom: 6px;
   padding-left: 6px;
   padding-right: 6px;
   padding-top: 10px;
-  width: 346px;
+  width: auto;
   font-family: sans-serif;
   font-size: 14.144px;
   line-height: 19.8016px;

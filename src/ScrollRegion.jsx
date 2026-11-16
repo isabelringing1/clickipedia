@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
-function ScrollRegion({ children, className = "" }) {
+function ScrollRegion({ children, className = "", scrollPositionRef }) {
   const scrollRef = useRef(null);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -16,6 +16,24 @@ function ScrollRegion({ children, className = "" }) {
       element.scrollTop + element.clientHeight < element.scrollHeight - 1,
     );
   }, []);
+
+  const handleScroll = useCallback(() => {
+    const element = scrollRef.current;
+    if (element && scrollPositionRef) {
+      scrollPositionRef.current = element.scrollTop;
+    }
+    updateFades();
+  }, [scrollPositionRef, updateFades]);
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (!element || !scrollPositionRef) return;
+    element.scrollTop = scrollPositionRef.current;
+    updateFades();
+    return () => {
+      scrollPositionRef.current = element.scrollTop;
+    };
+  }, [scrollPositionRef, updateFades]);
 
   useLayoutEffect(() => {
     const element = scrollRef.current;
@@ -38,7 +56,7 @@ function ScrollRegion({ children, className = "" }) {
       <div
         className="scroll-region-content"
         ref={scrollRef}
-        onScroll={updateFades}
+        onScroll={handleScroll}
       >
         {children}
       </div>

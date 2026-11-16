@@ -52,6 +52,7 @@ function visitedSet(session) {
 describe("Crawler", () => {
   it("only auto-opens targets in the room topic", async () => {
     const session = await start();
+    session.game.doorUnlocked = true;
     await session.openLink("general", "Cookie Clicker", 0);
     const crawler = session.crawlers.get("video-games");
     const opened = [];

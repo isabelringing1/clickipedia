@@ -22,13 +22,17 @@ const TOPIC_ROOMS = topicCatalog.topics.map((topic, topicIndex) => ({
   ...topic,
   topicIndex,
 }));
+const ARCHITECTURE_ROOM = TOPIC_ROOMS.find(
+  (topic) => topic.id === "architecture",
+);
 
 export class Session {
-  constructor({ baseUrl, graph, state, store, isNew, graphOptions }) {
+  constructor({ baseUrl, graph, state, store, profile, isNew, graphOptions }) {
     this.baseUrl = baseUrl;
     this.graph = graph;
     this.state = state;
     this.store = store;
+    this.profile = profile;
     this.isNew = isNew;
     this.graphOptions = graphOptions;
     this.crawlers = new Map();
@@ -176,7 +180,15 @@ export class Session {
     // An article can introduce only one room, and only the first time that
     // article is opened anywhere. Opening it again in another room cannot be
     // used to unlock another one of its topics.
-    if (globalNew) {
+    const foundDoor = title.replaceAll("_", " ") === "Door";
+    if (globalNew && foundDoor && !this.rooms.architecture) {
+      const unlockedRoom = this.unlockRoom(ARCHITECTURE_ROOM, {
+        ordinal,
+        title,
+      });
+      unlockedRoom.newlyUnlocked = true;
+      unlocked.push(ARCHITECTURE_ROOM.id);
+    } else if (globalNew && this.game.doorUnlocked) {
       for (const definition of TOPIC_ROOMS) {
         if (
           (topicMask & (1n << BigInt(definition.topicIndex))) !== 0n &&
@@ -207,6 +219,7 @@ export class Session {
 
   recordAutomatedOpen(roomId, ordinal) {
     const room = this.room(roomId);
+    room.hasAutoActivity = true;
     room.topicOpenedCount += 1;
     const noveltyKey = `${roomId}:${ordinal}`;
     const recorded = this.automationNovelty.get(noveltyKey);
@@ -266,7 +279,9 @@ export class Session {
     }
     for (const entry of history) {
       if (
-        entry.kind === "quest" &&
+        (entry.kind === "quest" ||
+          entry.kind === "door" ||
+          entry.kind === "reopen") &&
         protectedEntries.has(entry.seq) &&
         Number.isInteger(entry.articleSeq)
       ) {
@@ -311,6 +326,12 @@ export class Session {
     await this.store.write(this.record(now));
   }
 
+  async rememberDoorHintPurchase() {
+    if (this.profile.doorHintPurchased === true) return;
+    this.profile = { ...this.profile, doorHintPurchased: true };
+    await this.store.writeProfile(this.profile);
+  }
+
   exportText(now) {
     return exportSave(this.record(now), now);
   }
@@ -332,16 +353,31 @@ export class Session {
 // not move it. Only a new game reads latest.json, and its pin is written
 // before the game starts.
 export async function startSession({ baseUrl, store, graphOptions, now = Date.now() }) {
+  const profile = await store.loadProfile();
   const record = await store.load();
   if (record !== null) {
     const state = decodeSave(record);
+    state.game.doorHintPurchased =
+      state.game.doorHintPurchased || profile.doorHintPurchased === true;
+    if (state.game.doorHintPurchased && profile.doorHintPurchased !== true) {
+      profile.doorHintPurchased = true;
+      await store.writeProfile(profile);
+    }
     const graph = new GraphClient({
       baseUrl,
       manifest: state.manifest,
       manifestSha256: state.manifestSha256,
       options: graphOptions,
     });
-    return new Session({ baseUrl, graph, state, store, isNew: false, graphOptions });
+    return new Session({
+      baseUrl,
+      graph,
+      state,
+      store,
+      profile,
+      isNew: false,
+      graphOptions,
+    });
   }
 
   const latest = await loadLatest(baseUrl, graphOptions);
@@ -351,7 +387,16 @@ export async function startSession({ baseUrl, store, graphOptions, now = Date.no
     manifestSha256: latest.manifestSha256,
     now,
   });
-  const session = new Session({ baseUrl, graph, state, store, isNew: true, graphOptions });
+  state.game.doorHintPurchased = profile.doorHintPurchased === true;
+  const session = new Session({
+    baseUrl,
+    graph,
+    state,
+    store,
+    profile,
+    isNew: true,
+    graphOptions,
+  });
   await session.save(now);
   return session;
 }

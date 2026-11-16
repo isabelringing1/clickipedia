@@ -12,37 +12,47 @@ function Log(props) {
     rootEntry,
     resurfaceArticle,
   } = props;
-  const questsByArticle = new Map();
+  const alertsByArticle = new Map();
   let precedingArticleSeq = rootEntry.seq;
   for (const entry of history) {
     if (entry.kind === "article") {
       precedingArticleSeq = entry.seq;
-    } else if (entry.kind === "quest") {
+    } else if (entry.kind === "quest" || entry.kind === "door") {
       const articleSeq = entry.articleSeq ?? precedingArticleSeq;
-      const quests = questsByArticle.get(articleSeq) ?? [];
-      quests.push(entry);
-      questsByArticle.set(articleSeq, quests);
+      const alerts = alertsByArticle.get(articleSeq) ?? [];
+      alerts.push(entry);
+      alertsByArticle.set(articleSeq, alerts);
     }
   }
   const visibleHistory = history.filter(
     (entry) =>
-      entry.kind === "article" && (showAutos || entry.source !== "auto"),
+      entry.kind === "reopen" ||
+      (entry.kind === "article" &&
+        (showAutos ||
+          entry.source !== "auto" ||
+          alertsByArticle.has(entry.seq))),
   );
   return (
     <div id="log">
       {[rootEntry, ...visibleHistory].reverse().map((entry) => {
         const isAuto = entry.source === "auto";
-        const quests = questsByArticle.get(entry.seq) ?? [];
-        const hasDetails = entry.unlockedTopic || quests.length > 0;
+        const articleSeq =
+          entry.kind === "reopen" ? entry.articleSeq : entry.seq;
+        const alerts =
+          entry.kind === "article"
+            ? (alertsByArticle.get(entry.seq) ?? [])
+            : [];
+        const isReopened = entry.alreadyOpened || entry.kind === "reopen";
+        const hasDetails = entry.unlockedTopic || alerts.length > 0;
         return (
           <Fragment key={"log-" + entry.seq}>
             <div
               className={`log-entry${hasDetails ? " has-details" : ""}${isAuto ? " auto" : ""}`}
             >
-              &gt; Opened{" "}
+              {isReopened ? ">>" : ">"} Opened{" "}
               <a
                 className="log-article"
-                onClick={() => resurfaceArticle(entry.seq)}
+                onClick={() => resurfaceArticle(articleSeq)}
               >
                 {formatTopic(entry.title)}
               </a>
@@ -53,12 +63,21 @@ function Log(props) {
                 <strong>{entry.unlockedTopic.label}</strong>!
               </div>
             )}
-            {quests.map((quest) => (
+            {alerts.map((alert) => (
               <div
-                className="log-entry quest-complete-entry purple"
-                key={"log-" + quest.seq}
+                className={`log-entry quest-complete-entry${alert.kind === "door" ? " door-unlock-entry" : " purple"}`}
+                key={"log-" + alert.seq}
               >
-                <strong>{formatTopic(entry.title)}</strong> completed a quest!
+                {alert.kind === "door" ? (
+                  <>
+                    <strong>Door</strong> is unlocked.
+                  </>
+                ) : (
+                  <>
+                    <strong>{formatTopic(entry.title)}</strong> completed a
+                    quest!
+                  </>
+                )}
               </div>
             ))}
           </Fragment>

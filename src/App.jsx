@@ -4,7 +4,6 @@ import questsJson from "./quests.json";
 
 import Article from "./Article";
 import Menu, { SharedMenu } from "./Menu";
-import Progress from "./Progress";
 import TopicTaxonomy, { TopicProgress } from "./TopicTaxonomy";
 import Logo from "/Logo.png";
 import Debug from "./Debug";
@@ -24,6 +23,7 @@ import "./style/Wikipedia.css";
 import "./style/ReactResizable.css";
 
 const questList = questsJson["quests"];
+const regularQuestList = questList.filter((quest) => quest.id !== "door-quest");
 const LEGACY_SAVE_KEY = "clickipedia";
 // Article popups kept on screen; older ones remain in History. Dormant
 // windows are deliberately few because every large Wikipedia article already
@@ -35,6 +35,29 @@ const AUTOMATION_UI_INTERVAL_MS = 250;
 // the reveal cadence to it produces an even stream instead of a four-window
 // burst followed by gaps.
 const TITLE_WINDOW_INTERVAL_MS = 1000;
+
+function lastPlayerOpenedArticle(room) {
+  const availableArticles = new Set(
+    room.history
+      .filter((entry) => entry.kind === "article")
+      .map((entry) => entry.seq),
+  );
+  availableArticles.add(0);
+
+  for (let index = room.history.length - 1; index >= 0; index -= 1) {
+    const entry = room.history[index];
+    if (
+      entry.kind === "reopen" &&
+      availableArticles.has(entry.articleSeq)
+    ) {
+      return entry.articleSeq;
+    }
+    if (entry.kind === "article" && entry.source !== "auto") {
+      return entry.seq;
+    }
+  }
+  return 0;
+}
 
 const isAnything = () => true;
 const hasTopic = (mask, index) =>
@@ -191,10 +214,22 @@ function Game({ session }) {
     Number.isFinite,
   );
   const [quests, setQuests] = useGameField(session, checkpointer, "quests");
+  const [doorHintPurchased, setDoorHintPurchased] = useGameField(
+    session,
+    checkpointer,
+    "doorHintPurchased",
+    (value) => typeof value === "boolean",
+  );
   const [hasLeftGeneralRoom, setHasLeftGeneralRoom] = useGameField(
     session,
     checkpointer,
     "hasLeftGeneralRoom",
+    (value) => typeof value === "boolean",
+  );
+  const [doorUnlocked, setDoorUnlocked] = useGameField(
+    session,
+    checkpointer,
+    "doorUnlocked",
     (value) => typeof value === "boolean",
   );
   const [activeRoomId, setActiveRoomId] = useState(() =>
@@ -223,23 +258,23 @@ function Game({ session }) {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [activeView, setActiveView] = useState(() =>
-    session.game.lastView === "topics" ? "topics" : "articles",
+    session.game.doorUnlocked && session.game.lastView === "topics"
+      ? "topics"
+      : "articles",
   );
   const [roomOrigin, setRoomOrigin] = useState({ x: "50%", y: "50%" });
 
   // Articles are identified by their history sequence number; 0 is the
   // starting article, which is always present.
-  const [currentArticle, setCurrentArticle] = useState(() => {
-    const articles = activeRoom.history.filter(
-      (entry) => entry.kind == "article",
-    );
-    return articles.length > 0 ? articles[articles.length - 1].seq : 0;
-  });
+  const [currentArticle, setCurrentArticle] = useState(() =>
+    lastPlayerOpenedArticle(activeRoom),
+  );
   const [closedArticles, setClosedArticles] = useState(() => new Set());
 
   const currentArticleRef = useRef(currentArticle);
   const closedArticlesRef = useRef(closedArticles);
   const playerArticleHistory = useRef([0, currentArticle]);
+  const articleScrollPositions = useRef(new Map());
   const automationUiTimer = useRef(null);
   const activeRoomIdRef = useRef(activeRoomId);
 
@@ -250,12 +285,12 @@ function Game({ session }) {
 
   // Adds entries to the bounded history, keeping the article being read.
   const pushHistory = useCallback(
-    (items) => {
+    (items, keepSeq = currentArticleRef.current) => {
       const room = session.room(activeRoomIdRef.current);
       const added = session.addHistory(
         activeRoomIdRef.current,
         items,
-        currentArticleRef.current,
+        keepSeq,
       );
       const live = new Set(room.history.map((entry) => entry.seq));
       live.add(0);
@@ -290,14 +325,32 @@ function Game({ session }) {
 
   useEffect(() => {
     setQuests((current) => {
+      const firstTwoComplete = regularQuestList
+        .slice(0, 2)
+        .every((quest) => current[quest.id]?.complete);
       for (const quest of questList) {
-        if (quest.trigger <= knowledge && !current[quest.id]) {
+        const regularQuestIndex = regularQuestList.findIndex(
+          (regularQuest) => regularQuest.id === quest.id,
+        );
+        const eligible = quest.triggerAutos !== undefined
+          ? !doorUnlocked &&
+            (session.rooms.general.autos >= quest.triggerAutos ||
+              firstTwoComplete)
+          : quest.trigger <= knowledge &&
+            (regularQuestIndex < 2 || doorUnlocked);
+        if (eligible && !current[quest.id]) {
           return { ...current, [quest.id]: { complete: false, quest: quest } };
         }
       }
       return current;
     });
-  }, [knowledge, setQuests]);
+  }, [
+    knowledge,
+    doorUnlocked,
+    session,
+    session.rooms.general.autos,
+    setQuests,
+  ]);
 
   // Automation: open articles by following links in the stored graph.
   useEffect(() => {
@@ -446,19 +499,42 @@ function Game({ session }) {
     return null;
   };
 
-  const resurfaceArticle = useCallback((id) => {
-    setClosedArticles((closed) => {
-      if (!closed.has(id)) {
-        return closed;
-      }
-      const nextClosed = new Set(closed);
-      nextClosed.delete(id);
-      closedArticlesRef.current = nextClosed;
-      return nextClosed;
-    });
-    playerArticleHistory.current.push(id);
-    selectArticle(id);
-  }, [selectArticle]);
+  const resurfaceArticle = useCallback(
+    (id) => {
+      const room = session.room(activeRoomIdRef.current);
+      const article =
+        id === 0
+          ? room.root
+          : room.history.find(
+              (entry) => entry.kind === "article" && entry.seq === id,
+            );
+      if (!article) return;
+
+      pushHistory(
+        [
+          {
+            kind: "reopen",
+            articleSeq: id,
+            ordinal: article.ordinal,
+            title: article.title,
+          },
+        ],
+        id,
+      );
+      setClosedArticles((closed) => {
+        if (!closed.has(id)) {
+          return closed;
+        }
+        const nextClosed = new Set(closed);
+        nextClosed.delete(id);
+        closedArticlesRef.current = nextClosed;
+        return nextClosed;
+      });
+      playerArticleHistory.current.push(id);
+      selectArticle(id);
+    },
+    [session, pushHistory, selectArticle],
+  );
 
   const closeArticle = useCallback((id, topic) => {
     evictWikiPage(topic);
@@ -484,6 +560,19 @@ function Game({ session }) {
     setError("Non-article link clicked.");
   }, []);
 
+  const purchaseDoorHint = useCallback(() => {
+    if (session.game.doorHintPurchased) return;
+    if (session.game.knowledge - 1 < 10) {
+      setError("Not enough Knowledge.");
+      return;
+    }
+    setKnowledge((current) => current - 10);
+    setDoorHintPurchased(true);
+    session.rememberDoorHintPurchase().catch((profileError) => {
+      console.error("Could not persist the door hint purchase:", profileError);
+    });
+  }, [session, setKnowledge, setDoorHintPurchased]);
+
   const enterTopicRoom = useCallback((roomId, target) => {
     const room = session.rooms[roomId];
     if (!room) return;
@@ -507,9 +596,7 @@ function Game({ session }) {
     checkpointer.markDirty();
     setActiveRoomId(roomId);
     setHistory(room.history);
-    const roomArticles = room.history.filter((entry) => entry.kind === "article");
-    const nextCurrent =
-      roomArticles.length > 0 ? roomArticles[roomArticles.length - 1].seq : 0;
+    const nextCurrent = lastPlayerOpenedArticle(room);
     currentArticleRef.current = nextCurrent;
     setCurrentArticle(nextCurrent);
     closedArticlesRef.current = new Set();
@@ -541,7 +628,16 @@ function Game({ session }) {
     } else if (result.status == "self") {
       processSelfLink();
     } else if (result.status == "seen") {
-      setError("Already opened " + formatTopic(result.title) + "!");
+      const [entry] = pushHistory([
+        {
+          kind: "article",
+          ordinal: result.ordinal,
+          title: result.title,
+          alreadyOpened: true,
+        },
+      ]);
+      playerArticleHistory.current.push(entry.seq);
+      selectArticle(entry.seq);
     } else {
       const room = session.room(activeRoomIdRef.current);
       if (
@@ -566,6 +662,7 @@ function Game({ session }) {
           kind: "article",
           ordinal: result.ordinal,
           title: result.title,
+          ...(!result.globalNew ? { alreadyOpened: true } : {}),
           ...(unlockedRoom
             ? {
                 unlockedTopic: {
@@ -590,6 +687,36 @@ function Game({ session }) {
 
   const checkForQuest = useCallback((categories, articleSeq, articleTitle) => {
     const current = session.game.quests;
+    if (!session.game.doorUnlocked && formatTopic(articleTitle) === "Door") {
+      const doorQuest = current["door-quest"];
+      let nextQuests = current;
+      if (doorQuest && !doorQuest.complete) {
+        nextQuests = {
+          ...current,
+          "door-quest": { ...doorQuest, complete: true },
+        };
+      }
+      const secondQuest = regularQuestList[1];
+      const thirdQuest = regularQuestList[2];
+      if (
+        current[secondQuest?.id]?.complete &&
+        thirdQuest &&
+        !nextQuests[thirdQuest.id]
+      ) {
+        nextQuests = {
+          ...nextQuests,
+          [thirdQuest.id]: { complete: false, quest: thirdQuest },
+        };
+      }
+      if (nextQuests !== current) {
+        setQuests(nextQuests);
+      }
+      setDoorUnlocked(true);
+      pushHistory([
+        { kind: "door", articleSeq, title: articleTitle },
+      ]);
+      return true;
+    }
     for (const id of Object.keys(current)) {
       const questEntry = current[id];
       if (questEntry.complete) {
@@ -600,19 +727,41 @@ function Game({ session }) {
         questEntry.quest;
 
       if (categories.includes(latestQuest.category)) {
-        setQuests({ ...current, [id]: { ...questEntry, complete: true } });
+        const nextQuests = {
+          ...current,
+          [id]: { ...questEntry, complete: true },
+        };
+        const questIndex = regularQuestList.findIndex(
+          (quest) => quest.id === latestQuest.id,
+        );
+        const nextQuest = regularQuestList[questIndex + 1];
+        if (
+          nextQuest &&
+          !nextQuests[nextQuest.id] &&
+          (questIndex < 1 || session.game.doorUnlocked)
+        ) {
+          nextQuests[nextQuest.id] = {
+            complete: false,
+            quest: nextQuest,
+          };
+        }
+        setQuests(nextQuests);
         setKnowledge((value) => value + latestQuest.reward);
         session.room(activeRoomIdRef.current).knowledge += latestQuest.reward;
         setRoomRevision((value) => value + 1);
         console.log("Quest complete: " + questEntry.quest.id);
-        pushHistory([
-          { kind: "quest", articleSeq, title: articleTitle },
-        ]);
+        pushHistory([{ kind: "quest", articleSeq, title: articleTitle }]);
         return true;
       }
     }
     return false;
-  }, [session, setQuests, setKnowledge, pushHistory]);
+  }, [
+    session,
+    setQuests,
+    setKnowledge,
+    setDoorUnlocked,
+    pushHistory,
+  ]);
 
   const articles = history.filter((entry) => entry.kind == "article");
   const recentArticles = new Set(
@@ -652,14 +801,6 @@ function Game({ session }) {
             </button>
             <img src={Logo} className="game-logo" alt="Clickipedia" />
           </div>
-          <section className="global-stats" aria-label="Global game statistics">
-            <Progress
-              visitedCount={visitedCount}
-              articleCount={session.articleCount}
-              knowledge={knowledge}
-              hideBar
-            />
-          </section>
         </div>
 
         <div
@@ -680,8 +821,13 @@ function Game({ session }) {
                   key={activeRoomId}
                   history={history}
                   historyDroppedCount={activeRoom.historyDroppedCount}
+                  hasAutoActivity={activeRoom.hasAutoActivity}
+                  doorUnlocked={doorUnlocked}
                   rootEntry={rootEntry}
                   quests={quests}
+                  knowledge={knowledge}
+                  doorHintPurchased={doorHintPurchased}
+                  purchaseDoorHint={purchaseDoorHint}
                   anyBlocked={Object.values(session.rooms).some(
                     (room) => room.blocked,
                   )}
@@ -718,6 +864,16 @@ function Game({ session }) {
               <main className="game-stage" id="game-stage">
                 {[rootEntry, ...articles].map((entry) => {
                   const id = entry.seq;
+                  const scrollKey = `${activeRoomId}:${id}`;
+                  let scrollPositionRef =
+                    articleScrollPositions.current.get(scrollKey);
+                  if (!scrollPositionRef) {
+                    scrollPositionRef = { current: 0 };
+                    articleScrollPositions.current.set(
+                      scrollKey,
+                      scrollPositionRef,
+                    );
+                  }
                   if (
                     closedArticles.has(id) ||
                     (id != 0 && id != currentArticle && !recentArticles.has(id))
@@ -732,6 +888,7 @@ function Game({ session }) {
                       ordinal={entry.ordinal}
                       key={`${activeRoomId}-article-${id}`}
                       id={id}
+                      scrollPositionRef={scrollPositionRef}
                       spawnIndex={entry.spawn}
                       stackIndex={id}
                       resurfaceArticle={resurfaceArticle}
@@ -747,6 +904,8 @@ function Game({ session }) {
             </div>
             <SharedMenu
               knowledge={knowledge}
+              visitedCount={visitedCount}
+              articleCount={session.articleCount}
               autos={activeRoom.autos}
               automationStatus={
                 automationStatuses[activeRoomId] ?? "running"
